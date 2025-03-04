@@ -1,0 +1,22 @@
+export enum Disciplines {
+    "Agriculture / Water and Sanitation",
+    "Architecture, Built Environment and Planning",
+    "Business, Management and Leadership",
+    "Engineering",
+    "Marketing, Communication and Media",
+    "AI and Computer Science",
+    "Creative Arts, Design and Fashion",
+    "Education and Practice",
+    "Social and Society",
+    "Law",
+    "Environment, Conservation and Biodiversity",
+    "Medicine, Health and Sciences",
+    "Governance and Policy",
+    "Energy and Renewable Energy",
+    "Climate Change",
+    "Procurement, Logistics and Supply Chain",
+    "Accounting, Finance and Economics",
+    "Humanitarian, Risk and Disaster",
+    "Sustainability Management and Reporting",
+    "Land and Forestry Management"
+}

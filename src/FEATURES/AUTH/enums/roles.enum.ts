@@ -1,0 +1,9 @@
+export enum Roles {
+    STUDENT = 'STUDENT',
+    UNIVERSITY = 'UNIVERSITY',
+    EVENT_ORGANIZER = 'EVENT_ORGANISER',
+    PROFESSIONALS = 'PROFESSIONALS',
+  ADMIN = 'ADMIN',
+    USER = 'USER'
+  }
+  
