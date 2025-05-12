@@ -17,6 +17,7 @@ import JobsModel from "../../JOBS/schema/jobs.schema";
 import GrantsModel from "../../GRANTS/schema/grants.schema";
 import FellowshipModel from "../../FELLOWSHIP/schema/fellowship.schema";
 import EventsModel from "../../EVENTS/schema/events.schema";
+import redis from "../../../util/redis";
 // Extend Express Request to include Multer's file property
 interface MulterRequest extends Request {
   file: multer.File;
@@ -81,6 +82,11 @@ export class AdminController {
         {new: true, runValidators: true}
       )
         .then((result) => {
+
+          let key = '/admin-management/list'
+          redis.del(key)
+          redis.del(`${key}/list/${req.params.id}`)
+
           return res.status(201).json({
             status: true,
             message: "User delete success",
@@ -104,9 +110,21 @@ export class AdminController {
   // GET ALL USERS
   static async findAll(req: Request, res: Response) {
     try {
+      const key = req.originalUrl;
+      // Check cache first
+      const cachedData = await redis.get(key);
+      if (cachedData) {
+        console.log("✅ Returning cached data");
+        return res.json({
+          message: "Data found",
+          response: JSON.parse(cachedData),
+        });
+      }
+
       // TOTAL RESOURCES CREATED BY USERS
       AdminModel.find({status: {$ne: "DELETED"}})
         .then((response) => {
+          console.log('AdminModel-response :>> ', response);
           let data = response.map(async (value) => {
             const totalCareer = await CareerModel.countDocuments({
               author: value._id,
@@ -126,9 +144,10 @@ export class AdminController {
             const totalJobs = await JobsModel.countDocuments({
               author: value._id,
             });
-            const totalProfessional = await ProfessionalCourseModel.countDocuments({
-              author: value._id,
-            });
+            const totalProfessional =
+              await ProfessionalCourseModel.countDocuments({
+                author: value._id,
+              });
             const totalScholarships = await ScholarshipsModel.countDocuments({
               author: value._id,
             });
@@ -146,16 +165,18 @@ export class AdminController {
               totalFreeCourse,
               totalUniversity,
               totalScholarships,
-              ...value._doc
-            }
+              ...value._doc,
+            };
           });
-          Promise.all(data).then((result) => {
+          Promise.all(data).then(async (result) => {
+            // Cache the result for 1 hour (3600 seconds)
+            await redis.setEx(key, 3600, JSON.stringify(result));
             return res.status(200).json({
               status: true,
               message: "Success",
               response: result,
             });
-          })
+          });
         })
         .catch((error) => {
           return res.status(404).json({
@@ -175,9 +196,24 @@ export class AdminController {
   // GET SINGLE USERS
   static async findOne(req: Request, res: Response) {
     try {
-      let {id} = req.params;
+      let { id } = req.params;
+      
+      const key = req.originalUrl;
+      // Check cache first
+      const cachedData = await redis.get(key);
+      if (cachedData) {
+        console.log("✅ Returning cached data");
+        return res.json({
+          message: "Data found",
+          response: JSON.parse(cachedData),
+        });
+      }
+
       AdminModel.findOne({_id: id})
-        .then((response) => {
+        .then(async (response) => {
+           // Cache the result for 1 hour (3600 seconds)
+          await redis.setEx(key, 3600, JSON.stringify(response));
+          
           return res.status(201).json({
             status: true,
             message: "User success",
@@ -215,6 +251,10 @@ export class AdminController {
       model.status = status;
 
       const response = await model.save();
+
+      let key = '/admin-management/list'
+      redis.del(key)
+      redis.del(`${key}/list/${req.params.id}`)
 
       return res.status(201).json({
         status: true,

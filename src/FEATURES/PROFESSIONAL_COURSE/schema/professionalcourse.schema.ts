@@ -34,26 +34,11 @@ const ProfessionalCourseSchema = new mongoose.Schema(
     },
     industry: {
       type: String,
-      enum: [
-        "Food",
-        "Aviation",
-        "Oil and Gas",
-        "Power and Utilities",
-        "Bank and Financial Institutions",
-      ],
       required: false,
     },
     location: {type: String, required: false},
     deliveryType: {
       type: String,
-      enum: [
-        "Virtual classroom",
-        "Online",
-        "Hybrid",
-        "In-person",
-        "Self-paced",
-        "On-site",
-      ],
       required: false,
     },
     cdpHour: {type: Number, required: false},

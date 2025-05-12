@@ -3,6 +3,7 @@ import * as multer from "multer";
 import GrantsModel from "../schema/grants.schema";
 import mongoose from "mongoose";
 import {Roles} from "../../AUTH/enums/roles.enum";
+import redis from "../../../util/redis";
 
 interface MulterRequest extends Request {
   file: multer.File;
@@ -18,7 +19,7 @@ export class GrantsController {
         summary,
         benefits,
         eligibility,
-        application, 
+        application,
         applyLink,
       } = req.body;
 
@@ -29,13 +30,13 @@ export class GrantsController {
         summary,
         benefits,
         eligibility,
-        application, 
+        application,
         applyLink,
       };
 
       // If an image is uploaded, store its path
       if (req.file) {
-        grant.image = `${req.file.fieldname}/${req.file.filename}`;
+        grant.image = `${req.file.fieldname}${req.file.filename}`;
         console.log("req.file.path :>> ", req.file.path);
       }
 
@@ -60,7 +61,7 @@ export class GrantsController {
         summary,
         benefits,
         eligibility,
-        application, 
+        application,
         applyLink,
       } = req.body;
 
@@ -77,15 +78,18 @@ export class GrantsController {
       existingGrant.summary = summary || existingGrant.summary;
       existingGrant.benefits = benefits || existingGrant.benefits;
       existingGrant.eligibility = eligibility || existingGrant.eligibility;
-      existingGrant.application = application || existingGrant.application; 
+      existingGrant.application = application || existingGrant.application;
       existingGrant.applyLink = applyLink || existingGrant.applyLink;
       if (req.file) {
         existingGrant.image =
-          `${req.file.fieldname}/${req.file.filename}` || existingGrant.image;
+          `${req.file.fieldname}${req.file.filename}` || existingGrant.image;
         console.log(" existingModel.image :>> ", existingGrant.image);
       }
       // Save the updated grant
       const updatedGrant = await existingGrant.save();
+      let key = "/grants/";
+      redis.del(key);
+      redis.del(`${key}${req.params.id}`);
       res
         .status(200)
         .json({message: "Grant updated successfully", response: updatedGrant});
@@ -105,7 +109,7 @@ export class GrantsController {
 
       // If an image is uploaded, update the grant with the new image path
       if (req.file) {
-        grant.image = `${req.file.fieldname}/${req.file.filename}`; // Update image field with new image path
+        grant.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
         await grant.save(); // Save the updated grant
         res
           .status(201)
@@ -120,12 +124,20 @@ export class GrantsController {
 
   static async getOne(req: Request, res: Response) {
     try {
+      const key = req.originalUrl;
+      const cachedData = await redis.get(key);
+      if (cachedData) {
+        console.log("✅ Returning cached data");
+        return res.json({message: "Data found", response: JSON.parse(cachedData)});
+      }
+
       const grant = await GrantsModel.findById(req.params.id);
 
       if (!grant) {
         return res.status(404).json({error: "Grant not found"});
       }
 
+      await redis.setEx(key, 3600, JSON.stringify(grant));
       res.status(200).json({message: "Grant found", response: grant});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -136,17 +148,37 @@ export class GrantsController {
     try {
       const {id, role} = req["currentUser"];
       if (role == Roles.ADMIN) {
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        }
+
         const models = await GrantsModel.find({
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
+        // Cache the result for 1 hour (3600 seconds)
+        await redis.setEx(key, 3600, JSON.stringify(models));
         res.status(200).json({message: "Data found", response: models});
       } else {
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        }
+        
         const models = await GrantsModel.find({
           author: new mongoose.Types.ObjectId(id),
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
+         // Cache the result for 1 hour (3600 seconds)
+         await redis.setEx(key, 3600, JSON.stringify(models));
         res.status(200).json({message: "Data found", response: models});
       }
     } catch (error) {
@@ -167,6 +199,9 @@ export class GrantsController {
         return res.status(404).json({error: "Grant not found"});
       }
 
+      let key = "/grants/";
+      redis.del(key);
+      redis.del(`${key}${req.params.id}`);
       res
         .status(200)
         .json({message: "Grant status updated to DELETED", response: grant});
@@ -185,6 +220,31 @@ export class GrantsController {
       }
 
       res.status(200).json({message: "Grant successfully deleted"});
+    } catch (error) {
+      res.status(400).json({error: error.message});
+    }
+  }
+
+
+  // public
+  static async getAllPublic(req: Request, res: Response) {
+    try {
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        }
+
+        const models = await GrantsModel.find({
+          status: {$ne: "DELETED"},
+        }).sort({createdAt: -1});
+
+        // Cache the result for 1 hour (3600 seconds)
+        await redis.setEx(key, 3600, JSON.stringify(models));
+        res.status(200).json({message: "Data found", response: models});
+      
     } catch (error) {
       res.status(400).json({error: error.message});
     }

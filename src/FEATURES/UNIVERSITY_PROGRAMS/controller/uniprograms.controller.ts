@@ -3,6 +3,7 @@ import UniProgramModel from "../schema/uniprograms.schema";
 import * as multer from "multer";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
+import redis from "../../../util/redis";
 // import * as sanitizeHtml from "sanitize-html";
 const sanitizeHtml = require("sanitize-html");
 
@@ -76,7 +77,7 @@ export class UniProgramsController {
       };
       // If an image is uploaded, store its path
       if (req.file) {
-        model.image = `${req.file.fieldname}/${req.file.filename}`;
+        model.image = `${req.file.fieldname}${req.file.filename}`;
         console.log(" model.image :>> ", model.image);
       }
 
@@ -176,12 +177,17 @@ export class UniProgramsController {
       // If an image is uploaded, store its path
       if (req.file) {
         existingModel.image =
-          `${req.file.fieldname}/${req.file.filename}` || existingModel.image;
+          `${req.file.fieldname}${req.file.filename}` || existingModel.image;
         console.log(" existingModel.image :>> ", existingModel.image);
       }
 
       // Save the updated model
       const updatedModel = await existingModel.save();
+
+      let key = "/university-programs/";
+      redis.del(key);
+      redis.del(`${key}${req.params.id}`);
+
       res.status(200).json({
         message: "Program updated successfully",
         response: updatedModel,
@@ -202,7 +208,7 @@ export class UniProgramsController {
 
       // If an image is uploaded, update the program with the new image path
       if (req.file) {
-        program.image = `${req.file.fieldname}/${req.file.filename}`; // Update image field with new image path
+        program.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
         let response = await program.save(); // Save the updated program
 
         res
@@ -218,12 +224,22 @@ export class UniProgramsController {
 
   static async getOne(req: Request, res: Response) {
     try {
+      const key = req.originalUrl;
+      // Check cache first
+      const cachedData = await redis.get(key);
+      if (cachedData) {
+        console.log("✅ Returning cached data");
+        return res.json({message: "Data found", response: JSON.parse(cachedData)});
+      }
+
       const model = await UniProgramModel.findById(req.params.id);
 
       if (!model) {
         return res.status(404).json({error: "Program not found"});
       }
 
+      // Cache the result for 1 hour (3600 seconds)
+      await redis.setEx(key, 3600, JSON.stringify(model));
       res.status(200).json({message: "Program found", response: model});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -234,19 +250,37 @@ export class UniProgramsController {
     try {
       const {id, role} = req["currentUser"];
       if (role == Roles.ADMIN) {
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        }
+
         const models = await UniProgramModel.find({
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
-        res.status(200).json({ message: "Program found", response: models });
-        
+        // Cache the result for 1 hour (3600 seconds)
+        await redis.setEx(key, 3600, JSON.stringify(models));
+        res.status(200).json({message: "Program found", response: models});
       } else {
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        }
 
         const models = await UniProgramModel.find({
           author: new mongoose.Types.ObjectId(id),
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
+        // Cache the result for 1 hour (3600 seconds)
+        await redis.setEx(key, 3600, JSON.stringify(models));
         res.status(200).json({message: "Program found", response: models});
       }
     } catch (error) {
@@ -280,6 +314,9 @@ export class UniProgramsController {
         return res.status(404).json({error: "Program not found"});
       }
 
+      let key = "/university-programs/";
+      redis.del(key);
+      redis.del(`${key}${req.params.id}`);
       res.status(200).json({message: "Program successfully deleted"});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -303,6 +340,33 @@ export class UniProgramsController {
         .status(200)
         .json({message: "Program status updated to DELETED", program});
     } catch (error) {
+      res.status(400).json({error: error.message});
+    }
+  }
+
+
+  // Public
+  static async getAllPublic(req: Request, res: Response) {
+    try {
+    
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        }
+
+        const models = await UniProgramModel.find({
+          status: {$ne: "DELETED"},
+        }).sort({createdAt: -1});
+
+        // Cache the result for 1 hour (3600 seconds)
+        await redis.setEx(key, 3600, JSON.stringify(models));
+        res.status(200).json({message: "Program found", response: models});
+      
+    } catch (error) {
+      console.log('error :>> ', error);
       res.status(400).json({error: error.message});
     }
   }

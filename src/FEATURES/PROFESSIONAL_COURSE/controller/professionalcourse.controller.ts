@@ -3,6 +3,7 @@ import * as multer from "multer";
 import ProfessionalCourseModel from "../schema/professionalcourse.schema";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
+import redis from "../../../util/redis";
 
 interface MulterRequest extends Request {
   file: multer.File;
@@ -63,7 +64,7 @@ export class ProfessionalCourseController {
 
       // If an image is uploaded, store its path
       if (req.file) {
-        course.image = `${req.file.fieldname}/${req.file.filename}`;
+        course.image = `${req.file.fieldname}${req.file.filename}`;
         console.log("req.file.path :>> ", req.file.path);
       }
 
@@ -148,11 +149,14 @@ export class ProfessionalCourseController {
       existingCourse.language = language || existingCourse.language;
       if (req.file) {
         existingCourse.image =
-          `${req.file.fieldname}/${req.file.filename}` || existingCourse.image;
+          `${req.file.fieldname}${req.file.filename}` || existingCourse.image;
         console.log(" existingModel.image :>> ", existingCourse.image);
       }
       // Save the updated course
       const updatedCourse = await existingCourse.save();
+      let key = '/professional-courses/'
+      redis.del(key)
+      redis.del(`${key}${req.params.id}`)
       res
         .status(200)
         .json({
@@ -175,7 +179,7 @@ export class ProfessionalCourseController {
 
       // If an image is uploaded, update the course with the new image path
       if (req.file) {
-        course.image = `${req.file.fieldname}/${req.file.filename}`; // Update image field with new image path
+        course.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
         await course.save(); // Save the updated course
         res
           .status(201)
@@ -193,12 +197,22 @@ export class ProfessionalCourseController {
 
   static async getOne(req: Request, res: Response) {
     try {
+      const key = req.originalUrl;
+      // Check cache first
+      const cachedData = await redis.get(key);
+      if (cachedData) {
+        console.log("✅ Returning cached data");
+        return res.json({message: "Data found", response: JSON.parse(cachedData)});
+      }
       const course = await ProfessionalCourseModel.findById(req.params.id);
 
       if (!course) {
         return res.status(404).json({error: "Professional course not found"});
       }
 
+
+         // Cache the result for 1 hour (3600 seconds)
+         await redis.setEx(key, 3600, JSON.stringify(course));
       res
         .status(200)
         .json({message: "Professional course found", response: course});
@@ -211,17 +225,39 @@ export class ProfessionalCourseController {
     try {
       const {id, role} = req["currentUser"];
       if (role == Roles.ADMIN) {
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        }
+
         const models = await ProfessionalCourseModel.find({
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
+
+         // Cache the result for 1 hour (3600 seconds)
+         await redis.setEx(key, 3600, JSON.stringify(models));
         res.status(200).json({message: "Data found", response: models});
       } else {
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        }
+
         const models = await ProfessionalCourseModel.find({
           author: new mongoose.Types.ObjectId(id),
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
+
+         // Cache the result for 1 hour (3600 seconds)
+         await redis.setEx(key, 3600, JSON.stringify(models));
         res.status(200).json({message: "Data found", response: models});
       }
     } catch (error) {
@@ -242,6 +278,9 @@ export class ProfessionalCourseController {
         return res.status(404).json({error: "Course not found"});
       }
 
+      let key = '/professional-courses/'
+      redis.del(key)
+      redis.del(`${key}${req.params.id}`)
       res
         .status(200)
         .json({message: "Course status updated to DELETED", response: course});
@@ -262,6 +301,34 @@ export class ProfessionalCourseController {
       }
 
       res.status(200).json({message: "Course successfully deleted"});
+    } catch (error) {
+      res.status(400).json({error: error.message});
+    }
+  }
+
+
+
+  // Public
+  static async getAllPublic(req: Request, res: Response) {
+    try {
+     
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        }
+
+        const models = await ProfessionalCourseModel.find({
+          status: {$ne: "DELETED"},
+        }).sort({createdAt: -1});
+
+
+         // Cache the result for 1 hour (3600 seconds)
+         await redis.setEx(key, 3600, JSON.stringify(models));
+        res.status(200).json({message: "Data found", response: models});
+     
     } catch (error) {
       res.status(400).json({error: error.message});
     }

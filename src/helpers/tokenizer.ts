@@ -14,6 +14,6 @@ export class encrypt {
   }
 
   static generateToken(payload: any) {
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: "1d" });
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: "24d" });
   }
 }

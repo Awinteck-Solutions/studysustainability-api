@@ -55,12 +55,6 @@ Router.get("/",
 );
 
 
-Router.get("/:id",
-    (req: Request, res: Response) => {
-        EventsController.getOne(req, res)
-    }
-);
-
 
 
 Router.delete("/temporal/:id",
@@ -73,6 +67,21 @@ Router.delete("/permanent/:id",
         EventsController.permanentDelete(req, res)
     }
 );
+
+
+// PUBLIC ENDPOINTS
+Router.get("/public", (req: Request, res: Response) => {
+        EventsController.getAllPublic(req, res)
+    }
+);
+
+
+Router.get("/:id",
+    (req: Request, res: Response) => {
+        EventsController.getOne(req, res)
+    }
+);
+
 
 
 export default Router;

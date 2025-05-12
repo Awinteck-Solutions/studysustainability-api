@@ -55,11 +55,7 @@ Router.get("/",
 );
 
 
-Router.get("/:id",
-    (req: Request, res: Response) => {
-        FellowshipController.getOne(req, res)
-    }
-);
+
 
 Router.delete("/temporal/:id",
     (req: Request, res: Response) => {
@@ -73,5 +69,16 @@ Router.delete("/permanent/:id",
     }
 );
 
+// public
+Router.get("/public", (req: Request, res: Response) => {
+        FellowshipController.getAllPublic(req, res)
+    }
+);
+
+Router.get("/:id",
+    (req: Request, res: Response) => {
+        FellowshipController.getOne(req, res)
+    }
+);
 
 export default Router;

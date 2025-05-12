@@ -3,6 +3,7 @@ import * as multer from "multer";
 import FellowshipModel from "../schema/fellowship.schema";
 import mongoose from "mongoose";
 import {Roles} from "../../AUTH/enums/roles.enum";
+import redis from "../../../util/redis";
 
 interface MulterRequest extends Request {
   file: multer.File;
@@ -45,7 +46,7 @@ export class FellowshipController {
 
       // If an image is uploaded, store its path
       if (req.file) {
-        fellowshipData.image = `${req.file.fieldname}/${req.file.filename}`;
+        fellowshipData.image = `${req.file.fieldname}${req.file.filename}`;
       }
 
       // Create a new Fellowship model and save it
@@ -108,11 +109,14 @@ export class FellowshipController {
       existingFellowship.applyLink = applyLink || existingFellowship.applyLink;
       if (req.file) {
         existingFellowship.image =
-          `${req.file.fieldname}/${req.file.filename}` || existingFellowship.image;
+          `${req.file.fieldname}${req.file.filename}` || existingFellowship.image;
         console.log(" existingModel.image :>> ", existingFellowship.image);
       }
       // Save the updated Fellowship model
       const updatedFellowship = await existingFellowship.save();
+      let key = "/fellowships/";
+      redis.del(key);
+      redis.del(`${key}${req.params.id}`);
       res
         .status(200)
         .json({message: "Fellowship updated", response: updatedFellowship});
@@ -132,7 +136,7 @@ export class FellowshipController {
 
       // If an image is uploaded, update the model with the new image path
       if (req.file) {
-        fellowship.image = `${req.file.fieldname}/${req.file.filename}`; // Update image field with new image path
+        fellowship.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
         await fellowship.save(); // Save the updated model
         res.status(201).json({
           message: "Fellowship image updated successfully",
@@ -148,12 +152,22 @@ export class FellowshipController {
 
   static async getOne(req: Request, res: Response) {
     try {
+      const key = req.originalUrl;
+      // Check cache first
+      const cachedData = await redis.get(key);
+      if (cachedData) {
+        console.log("✅ Returning cached data");
+        return res.json({message: "Data found", response: JSON.parse(cachedData)});
+      }
+
       const fellowship = await FellowshipModel.findById(req.params.id);
 
       if (!fellowship) {
         return res.status(404).json({error: "Fellowship not found"});
       }
 
+       // Cache the result for 1 hour (3600 seconds)
+       await redis.setEx(key, 3600, JSON.stringify(fellowship));
       res.status(200).json({message: "Fellowship found", response: fellowship});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -164,17 +178,37 @@ export class FellowshipController {
     try {
       const {id, role} = req["currentUser"];
       if (role == Roles.ADMIN) {
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        }
+
         const models = await FellowshipModel.find({
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
+         // Cache the result for 1 hour (3600 seconds)
+         await redis.setEx(key, 3600, JSON.stringify(models));
         res.status(200).json({message: "Data found", response: models});
       } else {
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        }
+
         const models = await FellowshipModel.find({
           author: new mongoose.Types.ObjectId(id),
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
+         // Cache the result for 1 hour (3600 seconds)
+         await redis.setEx(key, 3600, JSON.stringify(models));
         res.status(200).json({message: "Data found", response: models});
       }
     } catch (error) {
@@ -195,6 +229,10 @@ export class FellowshipController {
         return res.status(404).json({error: "Fellowship not found"});
       }
 
+
+      let key = "/fellowships/";
+      redis.del(key);
+      redis.del(`${key}${req.params.id}`);
       res
         .status(200)
         .json({message: "Fellowship status updated to DELETED", fellowship});
@@ -213,6 +251,32 @@ export class FellowshipController {
       }
 
       res.status(200).json({message: "Fellowship successfully deleted"});
+    } catch (error) {
+      res.status(400).json({error: error.message});
+    }
+  }
+
+
+  // PUBLIC
+  static async getAllPublic(req: Request, res: Response) {
+    try {
+     
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        }
+
+        const models = await FellowshipModel.find({
+          status: {$ne: "DELETED"},
+        }).sort({createdAt: -1});
+
+         // Cache the result for 1 hour (3600 seconds)
+         await redis.setEx(key, 3600, JSON.stringify(models));
+        res.status(200).json({message: "Data found", response: models});
+      
     } catch (error) {
       res.status(400).json({error: error.message});
     }

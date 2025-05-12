@@ -8,6 +8,7 @@ import { Roles } from "../../AUTH/enums/roles.enum";
 import { Permission } from "../../AUTH/enums/permission.enum";
 import AdminModel from "../../AUTH/schema/admin.schema";
 import { FreeCourseController } from "../controller/freecourse.controller";
+import { cacheMiddleware } from "../../../middlewares/redis.middleware";
 
 const Router = express.Router();
 
@@ -48,18 +49,15 @@ Router.patch("/image/:id",
 
 Router.get("/",
     authentification,
-    authorization(AdminModel,[Roles.ADMIN, Roles.USER],[Permission.ALL,Permission.FREE_COURSE]),
+    authorization(AdminModel, [Roles.ADMIN, Roles.USER], [Permission.ALL, Permission.FREE_COURSE]),
+    // cacheMiddleware(),
     (req: Request, res: Response) => {
         FreeCourseController.getAll(req, res)
     }
 );
 
 
-Router.get("/:id",
-    (req: Request, res: Response) => {
-        FreeCourseController.getOne(req, res)
-    }
-);
+
 
 
 Router.delete("/temporal/:id",
@@ -73,5 +71,17 @@ Router.delete("/permanent/:id",
     }
 );
 
+
+// public
+Router.get("/public", (req: Request, res: Response) => {
+        FreeCourseController.getAllPublic(req, res)
+    }
+);
+
+Router.get("/:id",
+    (req: Request, res: Response) => {
+        FreeCourseController.getOne(req, res)
+    }
+);
 
 export default Router;

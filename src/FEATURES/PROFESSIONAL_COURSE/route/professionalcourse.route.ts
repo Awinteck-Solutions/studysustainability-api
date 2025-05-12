@@ -51,11 +51,7 @@ Router.get("/",
     }
 );
 
-Router.get("/:id",
-    (req: Request, res: Response) => {
-        ProfessionalCourseController.getOne(req, res)
-    }
-);
+
 
 Router.delete("/temporal/:id",
     (req: Request, res: Response) => {
@@ -69,5 +65,18 @@ Router.delete("/permanent/:id",
     }
 );
 
+
+// Public
+Router.get("/public", (req: Request, res: Response) => {
+        ProfessionalCourseController.getAllPublic(req, res)
+    }
+);
+
+
+Router.get("/:id",
+    (req: Request, res: Response) => {
+        ProfessionalCourseController.getOne(req, res)
+    }
+);
 
 export default Router;

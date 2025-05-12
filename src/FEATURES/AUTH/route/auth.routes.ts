@@ -46,6 +46,7 @@ Router.post("/admin/forgot-password",
     }
 );
 
+
 // RESET PASSWORD
 Router.post("/admin/reset-password",
     notification(Notification.RESET_PASSWORD, AdminModel),
@@ -53,5 +54,6 @@ Router.post("/admin/reset-password",
         AuthController.resetPassword(req,res)
     }
 );
+
 
 export default Router;

@@ -18,44 +18,24 @@ const JobsSchema = new mongoose.Schema(
   },
       jobCategory: {
         type: String,
-        enum: ["Vacancies", "Placements", "Internships", "Volunteer"],
         required: true,
       },
       employer: { type: String, required: true },
       jobTitle: { type: String, required: true },
       jobType: {
         type: String,
-        enum: ["Full-time", "Part-time", "Contract"],
         required: true,
       },
       workPreference: {
         type: String,
-        enum: ["Remote", "Hybrid", "On-site"],
         required: true,
       },
       experienceLevel: {
         type: String,
-        enum: [
-          "Apprenticeship",
-          "Graduate",
-          "Early Career",
-          "Mid-Career",
-          "Senior level",
-          "Director",
-          "Executive",
-        ],
         required: true,
       },
       organizationType: {
         type: String,
-        enum: [
-          "Company",
-          "Nonprofit",
-          "Project",
-          "Consultancy",
-          "Education",
-          "Government",
-        ],
         required: true,
       },
       industry: {

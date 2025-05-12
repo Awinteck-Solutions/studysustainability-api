@@ -21,7 +21,6 @@ const ScholarshipsSchema = new mongoose.Schema(
     nameOfProvider: { type: String, required: true },
         scholarshipType: {
           type: String,
-          enum: ["Undergraduate", "Postgraduate", "Short Course", "All"],
           required: true,
         },
         deadline: { type: Date, required: false }, // Can be null for rolling applications

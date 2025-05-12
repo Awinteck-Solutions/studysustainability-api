@@ -3,6 +3,7 @@ import * as multer from "multer";
 import CareerModel from "../schema/career.schema";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
+import redis from "../../../util/redis";
 
 interface MulterRequest extends Request {
   file: multer.File;
@@ -33,7 +34,7 @@ export class CareerController {
 
       // If an image is uploaded, store its path
       if (req.file) {
-        career.image = `${req.file.fieldname}/${req.file.filename}`;
+        career.image = `${req.file.fieldname}${req.file.filename}`;
         console.log("req.file.path :>> ", req.file.path);
       }
 
@@ -41,12 +42,10 @@ export class CareerController {
       const newCareer = new CareerModel(career);
       await newCareer.save();
 
-      res
-        .status(201)
-        .json({
-          message: "Career model created successfully",
-          response: newCareer,
-        });
+      res.status(201).json({
+        message: "Career model created successfully",
+        response: newCareer,
+      });
     } catch (error) {
       console.log("error :>> ", error);
       res.status(400).json({error: error.message});
@@ -85,6 +84,9 @@ export class CareerController {
 
       // Save the updated Career model
       const updatedCareer = await existingCareer.save();
+      let key = "/careers/";
+      redis.del(key);
+      redis.del(`${key}${req.params.id}`);
       res
         .status(200)
         .json({message: "Career model updated", response: updatedCareer});
@@ -104,14 +106,12 @@ export class CareerController {
 
       // If an image is uploaded, update the model with the new image path
       if (req.file) {
-        career.image = `${req.file.fieldname}/${req.file.filename}`; // Update image field with new image path
+        career.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
         await career.save(); // Save the updated model
-        res
-          .status(201)
-          .json({
-            message: "Career image updated successfully",
-            response: career,
-          });
+        res.status(201).json({
+          message: "Career image updated successfully",
+          response: career,
+        });
       } else {
         return res.status(400).json({error: "No image uploaded"});
       }
@@ -122,12 +122,23 @@ export class CareerController {
 
   static async getOne(req: Request, res: Response) {
     try {
+
+        const key = req.originalUrl;
+            const cachedData = await redis.get(key);
+            if (cachedData) {
+              console.log("✅ Returning cached data");
+              return res.json({message: "Data found", response: JSON.parse(cachedData)});
+            }
+      
+      
       const career = await CareerModel.findById(req.params.id);
 
       if (!career) {
         return res.status(404).json({error: "Career model not found"});
       }
 
+      await redis.setEx(key, 3600, JSON.stringify(career));
+      
       res.status(200).json({message: "Career model found", response: career});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -138,20 +149,39 @@ export class CareerController {
     try {
       const {id, role} = req["currentUser"];
       if (role == Roles.ADMIN) {
-        const models = await CareerModel
-          .find({
-            status: {$ne: "DELETED"},
-          })
-          .sort({createdAt: -1});
+        const key = req.originalUrl;
+
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found b", response: JSON.parse(cachedData)});
+        }
+
+        const models = await CareerModel.find({
+          status: {$ne: "DELETED"},
+        }).sort({createdAt: -1});
+
+        // Cache the result for 1 hour (3600 seconds)
+        await redis.setEx(key, 3600, JSON.stringify(models));
 
         res.status(200).json({message: "Data found", response: models});
       } else {
-        const models = await CareerModel
-          .find({
-            author: new mongoose.Types.ObjectId(id),
-            status: {$ne: "DELETED"},
-          })
-          .sort({createdAt: -1});
+        const key = req.originalUrl;
+
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        }
+
+        const models = await CareerModel.find({
+          author: new mongoose.Types.ObjectId(id),
+          status: {$ne: "DELETED"},
+        }).sort({createdAt: -1});
+        // Cache the result for 1 hour (3600 seconds)
+        await redis.setEx(key, 3600, JSON.stringify(models));
 
         res.status(200).json({message: "Data found", response: models});
       }
@@ -173,6 +203,10 @@ export class CareerController {
         return res.status(404).json({error: "Career model not found"});
       }
 
+      let key = "/careers/";
+      redis.del(key);
+      redis.del(`${key}${req.params.id}`);
+
       res
         .status(200)
         .json({message: "Career status updated to DELETED", career});
@@ -191,6 +225,32 @@ export class CareerController {
       }
 
       res.status(200).json({message: "Career model successfully deleted"});
+    } catch (error) {
+      res.status(400).json({error: error.message});
+    }
+  }
+
+
+
+  // PUBLIC ENDPOINTS
+  static async getAllPublic(req: Request, res: Response) {
+    try {
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found b", response: JSON.parse(cachedData)});
+        }
+        const models = await CareerModel.find({
+          status: {$ne: "DELETED"},
+        }).sort({createdAt: -1});
+
+        // Cache the result for 1 hour (3600 seconds)
+        await redis.setEx(key, 3600, JSON.stringify(models));
+
+        res.status(200).json({message: "Data found", response: models});
+      
     } catch (error) {
       res.status(400).json({error: error.message});
     }

@@ -54,12 +54,6 @@ Router.get("/",
 );
 
 
-Router.get("/:id",
-    (req: Request, res: Response) => {
-        CareerController.getOne(req, res)
-    }
-);
-
 
 Router.delete("/temporal/:id",
     (req: Request, res: Response) => {
@@ -72,5 +66,19 @@ Router.delete("/permanent/:id",
     }
 );
 
+
+  // PUBLIC ENDPOINTS
+Router.get("/public",
+   (req: Request, res: Response) => {
+        CareerController.getAllPublic(req, res)
+    }
+);
+
+
+Router.get("/:id",
+    (req: Request, res: Response) => {
+        CareerController.getOne(req, res)
+    }
+);
 
 export default Router;

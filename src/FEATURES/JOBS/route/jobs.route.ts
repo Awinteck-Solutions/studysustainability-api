@@ -55,12 +55,6 @@ Router.get("/",
 );
 
 
-Router.get("/:id",
-    (req: Request, res: Response) => {
-        JobsController.getOne(req, res)
-    }
-);
-
 
 Router.delete("/temporal/:id",
     (req: Request, res: Response) => {
@@ -72,6 +66,21 @@ Router.delete("/permanent/:id",
         JobsController.permanentDelete(req, res)
     }
 );
+
+
+// Public
+Router.get("/public", (req: Request, res: Response) => {
+        JobsController.getAllPublic(req, res)
+    }
+);
+
+
+Router.get("/:id",
+    (req: Request, res: Response) => {
+        JobsController.getOne(req, res)
+    }
+);
+
 
 
 export default Router;

@@ -3,6 +3,9 @@ import * as multer from "multer";
 import FreeCourseModel from "../schema/freecourse.schema";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
+import redis from "../../../util/redis";
+// const Redis = require("ioredis");
+// const redis = new Redis();
 
 interface MulterRequest extends Request {
   file: multer.File;
@@ -55,19 +58,17 @@ export class FreeCourseController {
 
       // If an image is uploaded, store its path
       if (req.file) {
-        freeCourseData.image = `${req.file.fieldname}/${req.file.filename}`;
+        freeCourseData.image = `${req.file.fieldname}${req.file.filename}`;
       }
 
       // Create a new FreeCourse model and save it
       const newFreeCourse = new FreeCourseModel(freeCourseData);
       await newFreeCourse.save();
 
-      res
-        .status(201)
-        .json({
-          message: "Free Course created successfully",
-          response: newFreeCourse,
-        });
+      res.status(201).json({
+        message: "Free Course created successfully",
+        response: newFreeCourse,
+      });
     } catch (error) {
       res.status(400).json({error: error.message});
     }
@@ -133,11 +134,16 @@ export class FreeCourseController {
       existingFreeCourse.applyLink = applyLink || existingFreeCourse.applyLink;
       if (req.file) {
         registerInterestForm.image =
-          `${req.file.fieldname}/${req.file.filename}` || registerInterestForm.image;
+          `${req.file.fieldname}${req.file.filename}` ||
+          registerInterestForm.image;
         console.log(" existingModel.image :>> ", registerInterestForm.image);
       }
       // Save the updated FreeCourse model
       const updatedFreeCourse = await existingFreeCourse.save();
+      let key = "/free-courses/";
+      redis.del(key);
+      redis.del(`${key}${req.params.id}`);
+
       res
         .status(200)
         .json({message: "Free Course updated", response: updatedFreeCourse});
@@ -157,14 +163,12 @@ export class FreeCourseController {
 
       // If an image is uploaded, update the model with the new image path
       if (req.file) {
-        freeCourse.image = `${req.file.fieldname}/${req.file.filename}`; // Update image field with new image path
+        freeCourse.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
         await freeCourse.save(); // Save the updated model
-        res
-          .status(201)
-          .json({
-            message: "Free Course image updated successfully",
-            response: freeCourse,
-          });
+        res.status(201).json({
+          message: "Free Course image updated successfully",
+          response: freeCourse,
+        });
       } else {
         return res.status(400).json({error: "No image uploaded"});
       }
@@ -175,12 +179,23 @@ export class FreeCourseController {
 
   static async getOne(req: Request, res: Response) {
     try {
+      const key = req.originalUrl;
+      const cachedData = await redis.get(key);
+      if (cachedData) {
+        console.log("✅ Returning cached data");
+        return res.json({
+          message: "Data found",
+          response: JSON.parse(cachedData),
+        });
+      }
+
       const freeCourse = await FreeCourseModel.findById(req.params.id);
 
       if (!freeCourse) {
         return res.status(404).json({error: "Free Course not found"});
       }
 
+      await redis.setEx(key, 3600, JSON.stringify(freeCourse));
       res
         .status(200)
         .json({message: "Free Course found", response: freeCourse});
@@ -193,20 +208,50 @@ export class FreeCourseController {
     try {
       const {id, role} = req["currentUser"];
       if (role == Roles.ADMIN) {
-        const models = await FreeCourseModel.find({
-          status: {$ne: "DELETED"},
-        }).sort({createdAt: -1});
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({
+            message: "Data found",
+            response: JSON.parse(cachedData),
+          });
+        }
 
+        const models = await FreeCourseModel.find(
+          {
+            status: {$ne: "DELETED"},
+          },
+          "resourceId nameOfInstitution titleOfCourse module duration createdAt status"
+        ).sort({createdAt: -1});
+
+        // Cache the result for 1 hour (3600 seconds)
+        await redis.setEx(key, 3600, JSON.stringify(models));
         res.status(200).json({message: "Data found", response: models});
       } else {
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({
+            message: "Data found",
+            response: JSON.parse(cachedData),
+          });
+        }
+
         const models = await FreeCourseModel.find({
           author: new mongoose.Types.ObjectId(id),
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
+        // Cache the result for 1 hour (3600 seconds)
+        await redis.setEx(key, 3600, JSON.stringify(models));
         res.status(200).json({message: "Data found", response: models});
       }
     } catch (error) {
+      console.log("error :>> ", error);
       res.status(400).json({error: error.message});
     }
   }
@@ -223,6 +268,10 @@ export class FreeCourseController {
       if (!freeCourse) {
         return res.status(404).json({error: "Free Course not found"});
       }
+
+      let key = "/free-courses/";
+      redis.del(key);
+      redis.del(`${key}${req.params.id}`);
 
       res
         .status(200)
@@ -243,6 +292,36 @@ export class FreeCourseController {
 
       res.status(200).json({message: "Free Course successfully deleted"});
     } catch (error) {
+      res.status(400).json({error: error.message});
+    }
+  }
+
+  //public
+  static async getAllPublic(req: Request, res: Response) {
+    try {
+      const key = req.originalUrl;
+      // Check cache first
+      const cachedData = await redis.get(key);
+      if (cachedData) {
+        console.log("✅ Returning cached data");
+        return res.json({
+          message: "Data found",
+          response: JSON.parse(cachedData),
+        });
+      }
+
+      const models = await FreeCourseModel.find(
+        {
+          status: {$ne: "DELETED"},
+        },
+        // "resourceId nameOfInstitution titleOfCourse module duration createdAt status"
+      ).sort({createdAt: -1});
+
+      // Cache the result for 1 hour (3600 seconds)
+      await redis.setEx(key, 3600, JSON.stringify(models));
+      res.status(200).json({message: "Data found", response: models});
+    } catch (error) {
+      console.log("error :>> ", error);
       res.status(400).json({error: error.message});
     }
   }

@@ -24,10 +24,12 @@ const CareerSchema = new mongoose.Schema(
       unique: true,
       required: true,
       default: generate6DigitID,
+      index: true
     },
       titleOfPosition: {
         type: String,
         required: true,
+        index: true
       },
       positionOverview: {
         type: String,
@@ -47,19 +49,6 @@ const CareerSchema = new mongoose.Schema(
       },
       roleLevel: {
         type: String,
-        enum: [
-          'Apprenticeship',
-          'Graduate Entry',
-          'Assistant',
-          'Manager',
-          'Director',
-          'Lead',
-          'Analyst',
-          'Consultant',
-          'Associate',
-          'Specialist',
-          'Senior'
-        ],
         required: true,
     },
       

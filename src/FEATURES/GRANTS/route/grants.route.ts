@@ -55,11 +55,6 @@ Router.get("/",
 );
 
 
-Router.get("/:id",
-    (req: Request, res: Response) => {
-        GrantsController.getOne(req, res)
-    }
-);
 
 
 Router.delete("/temporal/:id",
@@ -70,6 +65,19 @@ Router.delete("/temporal/:id",
 Router.delete("/permanent/:id",
     (req: Request, res: Response) => {
         GrantsController.permanentDelete(req, res)
+    }
+);
+
+
+// public
+Router.get("/public", (req: Request, res: Response) => {
+        GrantsController.getAllPublic(req, res)
+    }
+);
+
+Router.get("/:id",
+    (req: Request, res: Response) => {
+        GrantsController.getOne(req, res)
     }
 );
 

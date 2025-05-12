@@ -55,11 +55,7 @@ Router.get("/",
 );
 
 
-Router.get("/:id",
-    (req: Request, res: Response) => {
-        ScholarshipsController.getOne(req, res)
-    }
-);
+
 
 
 Router.delete("/temporal/:id",
@@ -73,5 +69,18 @@ Router.delete("/permanent/:id",
     }
 );
 
+
+
+// public
+Router.get("/public", (req: Request, res: Response) => {
+        ScholarshipsController.getAllPublic(req, res)
+    }
+);
+
+Router.get("/:id",
+    (req: Request, res: Response) => {
+        ScholarshipsController.getOne(req, res)
+    }
+);
 
 export default Router;

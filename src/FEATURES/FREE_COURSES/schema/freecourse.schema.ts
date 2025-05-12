@@ -10,7 +10,8 @@ const FreeCourseSchema = new mongoose.Schema(
           type: String,
           unique: true,
           required: true,
-          default: generate6DigitID,
+      default: generate6DigitID,
+      index: true
         },
     author: {
       type: mongoose.Schema.Types.ObjectId,
@@ -18,8 +19,8 @@ const FreeCourseSchema = new mongoose.Schema(
       required: false,
   },
       
-    nameOfInstitution: { type: String, required: false },
-    titleOfCourse: { type: String, required: false },
+    nameOfInstitution: { type: String, required: false,index: true },
+    titleOfCourse: { type: String, required: false ,index: true},
     language: {
       type: String,
       required: false,
@@ -29,7 +30,7 @@ const FreeCourseSchema = new mongoose.Schema(
       type: String,
       required: false,
     },
-    module: { type: String, required: false },
+    module: { type: String, required: false, index: true },
     nextStartDate: { type: Date, required: false },
     location: { type: String, required: false },
     delivery: {
@@ -39,7 +40,7 @@ const FreeCourseSchema = new mongoose.Schema(
     },
     duration: {
       type: Number,
-      required: false,
+      required: false, index: true
         },
     
     image: { type: String, required: false },

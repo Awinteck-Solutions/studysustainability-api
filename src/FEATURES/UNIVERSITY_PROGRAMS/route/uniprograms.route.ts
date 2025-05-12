@@ -54,12 +54,13 @@ Router.get("/",
     }
 );
 
-
-Router.get("/:id",
-    (req: Request, res: Response) => {
-        UniProgramsController.getOne(req, res)
-    }
+// Public
+Router.get("/public", (req: Request, res: Response) => {
+    UniProgramsController.getAllPublic(req, res)
+}
 );
+
+
 
 Router.get("/uni/:id",
     (req: Request, res: Response) => {
@@ -76,6 +77,12 @@ Router.delete("/temporal/:id",
 Router.delete("/permanent/:id",
     (req: Request, res: Response) => {
         UniProgramsController.permanentDelete(req, res)
+    }
+);
+
+Router.get("/:id",
+    (req: Request, res: Response) => {
+        UniProgramsController.getOne(req, res)
     }
 );
 

@@ -3,6 +3,7 @@ import * as multer from "multer";
 import EventsModel from "../schema/events.schema";
 import mongoose from "mongoose";
 import {Roles} from "../../AUTH/enums/roles.enum";
+import redis from "../../../util/redis";
 
 interface MulterRequest extends Request {
   file: multer.File;
@@ -65,7 +66,7 @@ export class EventsController {
 
       // If an image is uploaded, store its path
       if (req.file) {
-        eventData.image = `${req.file.fieldname}/${req.file.filename}`;
+        eventData.image = `${req.file.fieldname}${req.file.filename}`;
         console.log("req.file.path :>> ", req.file.path);
       }
 
@@ -144,12 +145,17 @@ export class EventsController {
       existingEvent.howToApply = howToApply || existingEvent.howToApply;
       if (req.file) {
         existingEvent.image =
-          `${req.file.fieldname}/${req.file.filename}` || existingEvent.image;
+          `${req.file.fieldname}${req.file.filename}` || existingEvent.image;
         console.log(" existingModel.image :>> ", existingEvent.image);
       }
 
       // Save the updated Event model
       const updatedEvent = await existingEvent.save();
+
+      let key = "/events/";
+      redis.del(key);
+      redis.del(`${key}${req.params.id}`);
+
       res.status(200).json({message: "Event updated", response: updatedEvent});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -167,7 +173,7 @@ export class EventsController {
 
       // If an image is uploaded, update the model with the new image path
       if (req.file) {
-        event.image = `${req.file.fieldname}/${req.file.filename}`; // Update image field with new image path
+        event.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
         await event.save(); // Save the updated model
         res
           .status(201)
@@ -182,11 +188,21 @@ export class EventsController {
 
   static async getOne(req: Request, res: Response) {
     try {
+      const key = req.originalUrl;
+      const cachedData = await redis.get(key);
+      if (cachedData) {
+        console.log("✅ Returning cached data");
+        return res.json({message: "Data found", response: JSON.parse(cachedData)});
+      }
+
+
       const event = await EventsModel.findById(req.params.id);
 
       if (!event) {
         return res.status(404).json({error: "Event not found"});
       }
+
+      await redis.setEx(key, 3600, JSON.stringify(event));
 
       res.status(200).json({message: "Event found", response: event});
     } catch (error) {
@@ -198,19 +214,42 @@ export class EventsController {
     try {
       const {id, role} = req["currentUser"];
       if (role == Roles.ADMIN) {
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        }
+
+
         const models = await EventsModel.find({
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
-          console.log('models :>> ', models);
+        console.log("models :>> ", models);
+
+         // Cache the result for 1 hour (3600 seconds)
+         await redis.setEx(key, 3600, JSON.stringify(models));
         res.status(200).json({message: "Events Data found", response: models});
       } else {
+        const key = req.originalUrl;
+        // Check cache first
+        const cachedData = await redis.get(key);
+        if (cachedData) {
+          console.log("✅ Returning cached data");
+          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        }
+
         const models = await EventsModel.find({
           author: new mongoose.Types.ObjectId(id),
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
-        console.log('models 2:>> ', models);
+        console.log("models 2:>> ", models);
+
+         // Cache the result for 1 hour (3600 seconds)
+         await redis.setEx(key, 3600, JSON.stringify(models));
         res.status(200).json({message: "Events Data found", response: models});
       }
     } catch (error) {
@@ -231,6 +270,9 @@ export class EventsController {
         return res.status(404).json({error: "Event not found"});
       }
 
+      let key = "/events/";
+      redis.del(key);
+      redis.del(`${key}${req.params.id}`);
       res.status(200).json({message: "Event status updated to DELETED", event});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -251,4 +293,33 @@ export class EventsController {
       res.status(400).json({error: error.message});
     }
   }
+
+
+// PUBLIC ENDPOINT
+static async getAllPublic(req: Request, res: Response) {
+  try {
+   
+      const key = req.originalUrl;
+      // Check cache first
+      const cachedData = await redis.get(key);
+      if (cachedData) {
+        console.log("✅ Returning cached data");
+        return res.json({message: "Data found", response: JSON.parse(cachedData)});
+      }
+
+      const models = await EventsModel.find({
+        status: {$ne: "DELETED"},
+      }).sort({createdAt: -1});
+
+      console.log("models :>> ", models);
+
+       // Cache the result for 1 hour (3600 seconds)
+       await redis.setEx(key, 3600, JSON.stringify(models));
+      res.status(200).json({message: "Events Data found", response: models});
+    
+  } catch (error) {
+    res.status(400).json({error: error.message});
+  }
+}
+
 }
