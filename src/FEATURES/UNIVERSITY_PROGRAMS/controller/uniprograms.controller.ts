@@ -349,21 +349,41 @@ export class UniProgramsController {
   static async getAllPublic(req: Request, res: Response) {
     try {
     
-        const key = req.originalUrl;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+  
+      const key = `${req.originalUrl}?page=${page}&limit=${limit}`;
         // Check cache first
         const cachedData = await redis.get(key);
         if (cachedData) {
           console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+          return res.json(JSON.parse(cachedData));
         }
 
-        const models = await UniProgramModel.find({
-          status: {$ne: "DELETED"},
-        }).sort({createdAt: -1});
+        const [models, total] = await Promise.all([
+          UniProgramModel.find({ status: { $ne: "DELETED" } })
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit),
+          UniProgramModel.countDocuments({ status: { $ne: "DELETED" } })
+        ]);
+      const totalPages = Math.ceil(total / limit);
+      
+      const responsePayload = {
+        message: "Data found",
+        metadata: {
+          total,
+          page,
+          limit,
+          totalPages,
+        },
+        response: models,
+      };
 
         // Cache the result for 1 hour (3600 seconds)
-        await redis.setEx(key, 3600, JSON.stringify(models));
-        res.status(200).json({message: "Program found", response: models});
+        await redis.setEx(key, 3600, JSON.stringify(responsePayload));
+        res.status(200).json(responsePayload);
       
     } catch (error) {
       console.log('error :>> ', error);

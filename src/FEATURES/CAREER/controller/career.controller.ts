@@ -235,24 +235,44 @@ export class CareerController {
   // PUBLIC ENDPOINTS
   static async getAllPublic(req: Request, res: Response) {
     try {
-        const key = req.originalUrl;
-        // Check cache first
-        const cachedData = await redis.get(key);
-        if (cachedData) {
-          console.log("✅ Returning cached data");
-          return res.json({message: "Data found b", response: JSON.parse(cachedData)});
-        }
-        const models = await CareerModel.find({
-          status: {$ne: "DELETED"},
-        }).sort({createdAt: -1});
-
-        // Cache the result for 1 hour (3600 seconds)
-        await redis.setEx(key, 3600, JSON.stringify(models));
-
-        res.status(200).json({message: "Data found", response: models});
-      
-    } catch (error) {
-      res.status(400).json({error: error.message});
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+      const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
+  
+      // Check cache first
+      const cachedData = await redis.get(key);
+      if (cachedData) {
+        console.log("✅ Returning cached data");
+        return res.json(JSON.parse(cachedData));
+      }
+  
+      const [models, total] = await Promise.all([
+        CareerModel.find({ status: { $ne: "DELETED" } })
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit),
+        CareerModel.countDocuments({ status: { $ne: "DELETED" } }),
+      ]);
+  
+      const result = {
+        message: "Data found",
+        response: models,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+  
+      // Cache the result for 1 hour (3600 seconds)
+      await redis.setEx(key, 3600, JSON.stringify(result));
+  
+      res.status(200).json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
     }
   }
+  
 }

@@ -299,30 +299,46 @@ export class FreeCourseController {
   //public
   static async getAllPublic(req: Request, res: Response) {
     try {
-      const key = req.originalUrl;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+  
+      const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
+  
       // Check cache first
       const cachedData = await redis.get(key);
       if (cachedData) {
         console.log("✅ Returning cached data");
-        return res.json({
-          message: "Data found",
-          response: JSON.parse(cachedData),
-        });
+        return res.json(JSON.parse(cachedData));
       }
-
-      const models = await FreeCourseModel.find(
-        {
-          status: {$ne: "DELETED"},
+  
+      const [models, total] = await Promise.all([
+        FreeCourseModel.find({ status: { $ne: "DELETED" } })
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit),
+        FreeCourseModel.countDocuments({ status: { $ne: "DELETED" } }),
+      ]);
+  
+      const result = {
+        message: "Data found",
+        response: models,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
         },
-        // "resourceId nameOfInstitution titleOfCourse module duration createdAt status"
-      ).sort({createdAt: -1});
-
+      };
+  
       // Cache the result for 1 hour (3600 seconds)
-      await redis.setEx(key, 3600, JSON.stringify(models));
-      res.status(200).json({message: "Data found", response: models});
+      await redis.setEx(key, 3600, JSON.stringify(result));
+  
+      res.status(200).json(result);
     } catch (error) {
       console.log("error :>> ", error);
-      res.status(400).json({error: error.message});
+      res.status(400).json({ error: error.message });
     }
   }
+  
 }
