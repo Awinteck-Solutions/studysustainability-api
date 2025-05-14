@@ -226,11 +226,11 @@ export class UniProgramsController {
     try {
       const key = req.originalUrl;
       // Check cache first
-      const cachedData = await redis.get(key);
-      if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json({message: "Data found", response: JSON.parse(cachedData)});
-      }
+      // const cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log("✅ Returning cached data");
+      //   return res.json({message: "Data found", response: JSON.parse(cachedData)});
+      // }
 
       const model = await UniProgramModel.findById(req.params.id);
 
@@ -239,7 +239,7 @@ export class UniProgramsController {
       }
 
       // Cache the result for 1 hour (3600 seconds)
-      await redis.setEx(key, 3600, JSON.stringify(model));
+      // await redis.setEx(key, 3600, JSON.stringify(model));
       res.status(200).json({message: "Program found", response: model});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -353,13 +353,13 @@ export class UniProgramsController {
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
   
-      const key = `${req.originalUrl}?page=${page}&limit=${limit}`;
-        // Check cache first
-        const cachedData = await redis.get(key);
-        if (cachedData) {
-          console.log("✅ Returning cached data");
-          return res.json(JSON.parse(cachedData));
-        }
+      // const key = `${req.originalUrl}?page=${page}&limit=${limit}`;
+      //   // Check cache first
+      //   const cachedData = await redis.get(key);
+      //   if (cachedData) {
+      //     console.log("✅ Returning cached data");
+      //     return res.json(JSON.parse(cachedData));
+      //   }
 
         const [models, total] = await Promise.all([
           UniProgramModel.find({ status: { $ne: "DELETED" } })
@@ -382,7 +382,7 @@ export class UniProgramsController {
       };
 
         // Cache the result for 1 hour (3600 seconds)
-        await redis.setEx(key, 3600, JSON.stringify(responsePayload));
+        // await redis.setEx(key, 3600, JSON.stringify(responsePayload));
         res.status(200).json(responsePayload);
       
     } catch (error) {

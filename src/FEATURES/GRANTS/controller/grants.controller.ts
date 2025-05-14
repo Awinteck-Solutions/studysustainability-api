@@ -125,11 +125,11 @@ export class GrantsController {
   static async getOne(req: Request, res: Response) {
     try {
       const key = req.originalUrl;
-      const cachedData = await redis.get(key);
-      if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json({message: "Data found", response: JSON.parse(cachedData)});
-      }
+      // const cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log("✅ Returning cached data");
+      //   return res.json({message: "Data found", response: JSON.parse(cachedData)});
+      // }
 
       const grant = await GrantsModel.findById(req.params.id);
 
@@ -137,7 +137,7 @@ export class GrantsController {
         return res.status(404).json({error: "Grant not found"});
       }
 
-      await redis.setEx(key, 3600, JSON.stringify(grant));
+      // await redis.setEx(key, 3600, JSON.stringify(grant));
       res.status(200).json({message: "Grant found", response: grant});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -236,11 +236,11 @@ export class GrantsController {
       const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
   
       // Check cache first
-      const cachedData = await redis.get(key);
-      if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json(JSON.parse(cachedData));
-      }
+      // const cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log("✅ Returning cached data");
+      //   return res.json(JSON.parse(cachedData));
+      // }
   
       const [models, total] = await Promise.all([
         GrantsModel.find({ status: { $ne: "DELETED" } })
@@ -262,7 +262,7 @@ export class GrantsController {
       };
   
       // Cache the result for 1 hour (3600 seconds)
-      await redis.setEx(key, 3600, JSON.stringify(result));
+      // await redis.setEx(key, 3600, JSON.stringify(result));
   
       res.status(200).json(result);
     } catch (error) {

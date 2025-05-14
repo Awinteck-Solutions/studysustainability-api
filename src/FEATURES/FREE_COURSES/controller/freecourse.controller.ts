@@ -180,14 +180,14 @@ export class FreeCourseController {
   static async getOne(req: Request, res: Response) {
     try {
       const key = req.originalUrl;
-      const cachedData = await redis.get(key);
-      if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json({
-          message: "Data found",
-          response: JSON.parse(cachedData),
-        });
-      }
+      // const cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log("✅ Returning cached data");
+      //   return res.json({
+      //     message: "Data found",
+      //     response: JSON.parse(cachedData),
+      //   });
+      // }
 
       const freeCourse = await FreeCourseModel.findById(req.params.id);
 
@@ -195,7 +195,7 @@ export class FreeCourseController {
         return res.status(404).json({error: "Free Course not found"});
       }
 
-      await redis.setEx(key, 3600, JSON.stringify(freeCourse));
+      // await redis.setEx(key, 3600, JSON.stringify(freeCourse));
       res
         .status(200)
         .json({message: "Free Course found", response: freeCourse});
@@ -306,11 +306,11 @@ export class FreeCourseController {
       const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
   
       // Check cache first
-      const cachedData = await redis.get(key);
-      if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json(JSON.parse(cachedData));
-      }
+      // const cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log("✅ Returning cached data");
+      //   return res.json(JSON.parse(cachedData));
+      // }
   
       const [models, total] = await Promise.all([
         FreeCourseModel.find({ status: { $ne: "DELETED" } })
@@ -332,7 +332,7 @@ export class FreeCourseController {
       };
   
       // Cache the result for 1 hour (3600 seconds)
-      await redis.setEx(key, 3600, JSON.stringify(result));
+      // await redis.setEx(key, 3600, JSON.stringify(result));
   
       res.status(200).json(result);
     } catch (error) {

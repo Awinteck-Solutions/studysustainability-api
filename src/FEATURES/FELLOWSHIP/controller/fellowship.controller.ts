@@ -154,11 +154,11 @@ export class FellowshipController {
     try {
       const key = req.originalUrl;
       // Check cache first
-      const cachedData = await redis.get(key);
-      if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json({message: "Data found", response: JSON.parse(cachedData)});
-      }
+      // const cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log("✅ Returning cached data");
+      //   return res.json({message: "Data found", response: JSON.parse(cachedData)});
+      // }
 
       const fellowship = await FellowshipModel.findById(req.params.id);
 
@@ -167,7 +167,7 @@ export class FellowshipController {
       }
 
        // Cache the result for 1 hour (3600 seconds)
-       await redis.setEx(key, 3600, JSON.stringify(fellowship));
+      //  await redis.setEx(key, 3600, JSON.stringify(fellowship));
       res.status(200).json({message: "Fellowship found", response: fellowship});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -266,11 +266,11 @@ export class FellowshipController {
       const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
   
       // Check cache first
-      const cachedData = await redis.get(key);
-      if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json(JSON.parse(cachedData));
-      }
+      // const cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log("✅ Returning cached data");
+      //   return res.json(JSON.parse(cachedData));
+      // }
   
       const [models, total] = await Promise.all([
         FellowshipModel.find({ status: { $ne: "DELETED" } })
@@ -292,7 +292,7 @@ export class FellowshipController {
       };
   
       // Cache the result for 1 hour (3600 seconds)
-      await redis.setEx(key, 3600, JSON.stringify(result));
+      // await redis.setEx(key, 3600, JSON.stringify(result));
       res.status(200).json(result);
   
     } catch (error: any) {

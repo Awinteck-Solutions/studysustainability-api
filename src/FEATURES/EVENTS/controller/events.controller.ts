@@ -304,11 +304,11 @@ static async getAllPublic(req: Request, res: Response) {
     const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
 
     // Check cache first
-    const cachedData = await redis.get(key);
-    if (cachedData) {
-      console.log("✅ Returning cached data");
-      return res.json(JSON.parse(cachedData));
-    }
+    // const cachedData = await redis.get(key);
+    // if (cachedData) {
+    //   console.log("✅ Returning cached data");
+    //   return res.json(JSON.parse(cachedData));
+    // }
 
     const [models, total] = await Promise.all([
       EventsModel.find({ status: { $ne: "DELETED" } })
@@ -330,7 +330,7 @@ static async getAllPublic(req: Request, res: Response) {
     };
 
     // Cache the result for 1 hour (3600 seconds)
-    await redis.setEx(key, 3600, JSON.stringify(result));
+    // await redis.setEx(key, 3600, JSON.stringify(result));
     res.status(200).json(result);
 
   } catch (error: any) {

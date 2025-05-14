@@ -150,14 +150,14 @@ export class ScholarshipsController {
     try {
       const key = req.originalUrl;
       // Check cache first
-      const cachedData = await redis.get(key);
-      if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json({
-          message: "Data found",
-          response: JSON.parse(cachedData),
-        });
-      }
+      // const cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log("✅ Returning cached data");
+      //   return res.json({
+      //     message: "Data found",
+      //     response: JSON.parse(cachedData),
+      //   });
+      // }
 
       const scholarship = await ScholarshipsModel.findById(req.params.id);
 
@@ -166,7 +166,7 @@ export class ScholarshipsController {
       }
 
       // Cache the result for 1 hour (3600 seconds)
-      await redis.setEx(key, 3600, JSON.stringify(scholarship));
+      // await redis.setEx(key, 3600, JSON.stringify(scholarship));
       res
         .status(200)
         .json({message: "Scholarship found", response: scholarship});
@@ -275,11 +275,11 @@ export class ScholarshipsController {
       const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
   
       // Check cache first
-      const cachedData = await redis.get(key);
-      if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json(JSON.parse(cachedData));
-      }
+      // const cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log("✅ Returning cached data");
+      //   return res.json(JSON.parse(cachedData));
+      // }
   
       const [models, total] = await Promise.all([
         ScholarshipsModel.find({
@@ -303,7 +303,7 @@ export class ScholarshipsController {
       };
   
       // Cache the result for 1 hour (3600 seconds)
-      await redis.setEx(key, 3600, JSON.stringify(result));
+      // await redis.setEx(key, 3600, JSON.stringify(result));
   
       res.status(200).json(result);
     } catch (error) {

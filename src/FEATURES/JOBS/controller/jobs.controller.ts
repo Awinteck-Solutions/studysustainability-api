@@ -171,11 +171,11 @@ export class JobsController {
     try {
       const key = req.originalUrl;
       // Check cache first
-      const cachedData = await redis.get(key);
-      if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json({message: "Data found", response: JSON.parse(cachedData)});
-      }
+      // const cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log("✅ Returning cached data");
+      //   return res.json({message: "Data found", response: JSON.parse(cachedData)});
+      // }
 
       const job = await JobsModel.findById(req.params.id);
 
@@ -184,7 +184,7 @@ export class JobsController {
       }
 
        // Cache the result for 1 hour (3600 seconds)
-       await redis.setEx(key, 3600, JSON.stringify(job));
+      //  await redis.setEx(key, 3600, JSON.stringify(job));
       res.status(200).json({message: "Job found", response: job});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -282,11 +282,11 @@ export class JobsController {
       const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
   
       // Check cache first
-      const cachedData = await redis.get(key);
-      if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json(JSON.parse(cachedData));
-      }
+      // const cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log("✅ Returning cached data");
+      //   return res.json(JSON.parse(cachedData));
+      // }
   
       const [models, total] = await Promise.all([
         JobsModel.find({ status: { $ne: "DELETED" } })
@@ -308,7 +308,7 @@ export class JobsController {
       };
   
       // Cache the result for 1 hour (3600 seconds)
-      await redis.setEx(key, 3600, JSON.stringify(result));
+      // await redis.setEx(key, 3600, JSON.stringify(result));
   
       res.status(200).json(result);
     } catch (error) {
