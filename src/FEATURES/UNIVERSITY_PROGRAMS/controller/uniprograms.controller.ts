@@ -255,7 +255,10 @@ export class UniProgramsController {
         const cachedData = await redis.get(key);
         if (cachedData) {
           console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+          return res.json({
+            message: "Data found",
+            response: JSON.parse(cachedData),
+          });
         }
 
         const models = await UniProgramModel.find({
@@ -271,7 +274,10 @@ export class UniProgramsController {
         const cachedData = await redis.get(key);
         if (cachedData) {
           console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+          return res.json({
+            message: "Data found",
+            response: JSON.parse(cachedData),
+          });
         }
 
         const models = await UniProgramModel.find({
@@ -344,15 +350,14 @@ export class UniProgramsController {
     }
   }
 
-
   // Public
+
   static async getAllPublic(req: Request, res: Response) {
     try {
-    
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
-  
+
       // const key = `${req.originalUrl}?page=${page}&limit=${limit}`;
       //   // Check cache first
       //   const cachedData = await redis.get(key);
@@ -361,15 +366,56 @@ export class UniProgramsController {
       //     return res.json(JSON.parse(cachedData));
       //   }
 
-        const [models, total] = await Promise.all([
-          UniProgramModel.find({ status: { $ne: "DELETED" } })
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limit),
-          UniProgramModel.countDocuments({ status: { $ne: "DELETED" } })
-        ]);
+      const {
+        search,
+        discipline,
+        studyType,
+        qualification,
+        institution,
+        location,
+        deliveryType,
+        startTerm,
+      } = req.query;
+
+      const query: any = {
+        status: {$ne: "DELETED"},
+      };
+
+      // Filters
+      if (discipline) query.discipline = discipline;
+      if (studyType) query.studyType = studyType;
+      if (qualification) query.qualification = qualification;
+      if (institution) query.institution = institution;
+      if (location) query.location = location;
+      if (deliveryType) query.delivery = deliveryType;
+
+      // Filter for upcoming startTerm (date comparison)
+      if (startTerm === "upcoming") {
+        query.startTerm = {$gte: new Date()};
+      } else if (startTerm) {
+        query.startTerm = startTerm;
+      }
+
+      // Search limited to 'title' and 'description'
+      if (search) {
+        const regex = new RegExp(search as string, "i");
+        query.$or = [
+          {titleOfProgramme: regex},
+          {aboutCourse: regex},
+          {nameOfInstitution: regex},
+        ];
+      }
+
+      const [models, total] = await Promise.all([
+        UniProgramModel.find(query)
+          .sort({createdAt: -1})
+          .skip(skip)
+          .limit(limit),
+        UniProgramModel.countDocuments(query),
+      ]);
+
       const totalPages = Math.ceil(total / limit);
-      
+
       const responsePayload = {
         message: "Data found",
         metadata: {
@@ -381,12 +427,11 @@ export class UniProgramsController {
         response: models,
       };
 
-        // Cache the result for 1 hour (3600 seconds)
-        // await redis.setEx(key, 3600, JSON.stringify(responsePayload));
-        res.status(200).json(responsePayload);
-      
+      // Cache the result for 1 hour (3600 seconds)
+      // await redis.setEx(key, 3600, JSON.stringify(responsePayload));
+      res.status(200).json(responsePayload);
     } catch (error) {
-      console.log('error :>> ', error);
+      console.log("error :>> ", error);
       res.status(400).json({error: error.message});
     }
   }

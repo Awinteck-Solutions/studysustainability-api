@@ -309,6 +309,50 @@ export class ProfessionalCourseController {
 
 
   // Public
+  // static async getAllPublic(req: Request, res: Response) {
+  //   try {
+  //     const page = parseInt(req.query.page as string) || 1;
+  //     const limit = parseInt(req.query.limit as string) || 10;
+  //     const skip = (page - 1) * limit;
+  
+  //     const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
+  
+  //     // Check cache first
+  //     // const cachedData = await redis.get(key);
+  //     // if (cachedData) {
+  //     //   console.log("✅ Returning cached data");
+  //     //   return res.json(JSON.parse(cachedData));
+  //     // }
+  
+  //     const [models, total] = await Promise.all([
+  //       ProfessionalCourseModel.find({
+  //         status: { $ne: "DELETED" },
+  //       })
+  //         .sort({ createdAt: -1 })
+  //         .skip(skip)
+  //         .limit(limit),
+  //       ProfessionalCourseModel.countDocuments({ status: { $ne: "DELETED" } }),
+  //     ]);
+  
+  //     const result = {
+  //       message: "Data found",
+  //       response: models,
+  //       pagination: {
+  //         total,
+  //         page,
+  //         limit,
+  //         totalPages: Math.ceil(total / limit),
+  //       },
+  //     };
+  
+  //     // Cache the result for 1 hour (3600 seconds)
+  //     // await redis.setEx(key, 3600, JSON.stringify(result));
+  
+  //     res.status(200).json(result);
+  //   } catch (error) {
+  //     res.status(400).json({ error: error.message });
+  //   }
+  // }
   static async getAllPublic(req: Request, res: Response) {
     try {
       const page = parseInt(req.query.page as string) || 1;
@@ -324,14 +368,52 @@ export class ProfessionalCourseController {
       //   return res.json(JSON.parse(cachedData));
       // }
   
+      const query: any = {
+        status: { $ne: "DELETED" },
+      };
+  
+      // Search
+      const search = req.query.search as string;
+      if (search) {
+        query.$or = [
+          { nameOfCourse: { $regex: search, $options: "i" } },
+          { nameOfProvider: { $regex: search, $options: "i" } },
+          { aboutCourse: { $regex: search, $options: "i" } },
+        ];
+      }
+  
+      // Filters
+      if (req.query.discipline) {
+        query.discipline = req.query.discipline;
+      }
+      if (req.query.studyType) {
+        query.studyType = req.query.studyType;
+      }
+      if (req.query.qualification) {
+        query.qualification = req.query.qualification;
+      }
+      if (req.query.institution) {
+        query.institution = req.query.institution;
+      }
+      if (req.query.location) {
+        query.location = req.query.location;
+      }
+      if (req.query.deliveryType) {
+        query.deliveryType = req.query.deliveryType;
+      }
+  
+      // Filter by startTerm >= today
+      const today = new Date();
+      if (req.query.startTerm || true) {
+        query.startTerm = { $gte: today };
+      }
+  
       const [models, total] = await Promise.all([
-        ProfessionalCourseModel.find({
-          status: { $ne: "DELETED" },
-        })
+        ProfessionalCourseModel.find(query)
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        ProfessionalCourseModel.countDocuments({ status: { $ne: "DELETED" } }),
+        ProfessionalCourseModel.countDocuments(query),
       ]);
   
       const result = {
@@ -353,5 +435,6 @@ export class ProfessionalCourseController {
       res.status(400).json({ error: error.message });
     }
   }
+  
   
 }

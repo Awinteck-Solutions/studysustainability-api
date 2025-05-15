@@ -266,6 +266,52 @@ export class ScholarshipsController {
   }
 
   // public
+  // static async getAllPublic(req: Request, res: Response) {
+  //   try {
+  //     const page = parseInt(req.query.page as string) || 1;
+  //     const limit = parseInt(req.query.limit as string) || 10;
+  //     const skip = (page - 1) * limit;
+  
+  //     const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
+  
+  //     // Check cache first
+  //     // const cachedData = await redis.get(key);
+  //     // if (cachedData) {
+  //     //   console.log("✅ Returning cached data");
+  //     //   return res.json(JSON.parse(cachedData));
+  //     // }
+  
+  //     const [models, total] = await Promise.all([
+  //       ScholarshipsModel.find({
+  //         status: { $ne: "DELETED" },
+  //       })
+  //         .sort({ createdAt: -1 })
+  //         .skip(skip)
+  //         .limit(limit),
+  //       ScholarshipsModel.countDocuments({ status: { $ne: "DELETED" } }),
+  //     ]);
+  
+  //     const result = {
+  //       message: "Data found",
+  //       response: models,
+  //       pagination: {
+  //         total,
+  //         page,
+  //         limit,
+  //         totalPages: Math.ceil(total / limit),
+  //       },
+  //     };
+  
+  //     // Cache the result for 1 hour (3600 seconds)
+  //     // await redis.setEx(key, 3600, JSON.stringify(result));
+  
+  //     res.status(200).json(result);
+  //   } catch (error) {
+  //     console.log('error :>> ', error);
+  //     res.status(400).json({ error: error.message });
+  //   }
+  // }
+  
   static async getAllPublic(req: Request, res: Response) {
     try {
       const page = parseInt(req.query.page as string) || 1;
@@ -281,14 +327,38 @@ export class ScholarshipsController {
       //   return res.json(JSON.parse(cachedData));
       // }
   
+      // Construct query
+      const query: any = {
+        status: { $ne: "DELETED" },
+      };
+  
+      // Search
+      const search = req.query.search as string;
+      if (search) {
+        query.$or = [
+          { titleOfScholarship: { $regex: search, $options: "i" } },
+          { nameOfProvider: { $regex: search, $options: "i" } },
+          { summary: { $regex: search, $options: "i" } },
+        ];
+      }
+  
+      // Filters
+      if (req.query.scholarshipType) {
+        query.scholarshipType = req.query.scholarshipType;
+      }
+  
+      // Filter by deadline >= current date
+      const today = new Date();
+      if (req.query.deadline || true) {
+        query.deadline = { $gte: today };
+      }
+  
       const [models, total] = await Promise.all([
-        ScholarshipsModel.find({
-          status: { $ne: "DELETED" },
-        })
+        ScholarshipsModel.find(query)
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        ScholarshipsModel.countDocuments({ status: { $ne: "DELETED" } }),
+        ScholarshipsModel.countDocuments(query),
       ]);
   
       const result = {

@@ -258,11 +258,97 @@ export class FellowshipController {
 
 
   // PUBLIC
+  // static async getAllPublic(req: Request, res: Response) {
+  //   try {
+  //     const page = parseInt(req.query.page as string) || 1;
+  //     const limit = parseInt(req.query.limit as string) || 10;
+  //     const skip = (page - 1) * limit;
+  //     const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
+  
+  //     // Check cache first
+  //     // const cachedData = await redis.get(key);
+  //     // if (cachedData) {
+  //     //   console.log("✅ Returning cached data");
+  //     //   return res.json(JSON.parse(cachedData));
+  //     // }
+  
+  //     const [models, total] = await Promise.all([
+  //       FellowshipModel.find({ status: { $ne: "DELETED" } })
+  //         .sort({ createdAt: -1 })
+  //         .skip(skip)
+  //         .limit(limit),
+  //       FellowshipModel.countDocuments({ status: { $ne: "DELETED" } }),
+  //     ]);
+  
+  //     const result = {
+  //       message: "Data found",
+  //       response: models,
+  //       pagination: {
+  //         total,
+  //         page,
+  //         limit,
+  //         totalPages: Math.ceil(total / limit),
+  //       },
+  //     };
+  
+  //     // Cache the result for 1 hour (3600 seconds)
+  //     // await redis.setEx(key, 3600, JSON.stringify(result));
+  //     res.status(200).json(result);
+  
+  //   } catch (error: any) {
+  //     res.status(400).json({ error: error.message });
+  //   }
+  // }
+  
   static async getAllPublic(req: Request, res: Response) {
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
+  
+      const {
+        search,
+        createdAt, // expected values: "today", "week", "month"
+      } = req.query;
+  
+      const filter: any = {
+        status: { $ne: "DELETED" },
+      };
+  
+      // Search functionality
+      if (search) {
+        const searchRegex = new RegExp(search as string, "i");
+        filter.$or = [
+          { nameOfProvider: searchRegex },
+          { titleOfFellowship: searchRegex },
+          { summary: searchRegex },
+        ];
+      }
+  
+      // createdAt filter
+      if (createdAt) {
+        const now = new Date();
+        let startDate: Date | null = null;
+  
+        if (createdAt === "today") {
+          startDate = new Date(now.setHours(0, 0, 0, 0));
+        } else if (createdAt === "week") {
+          const dayOfWeek = now.getDay(); // 0 (Sun) to 6 (Sat)
+          startDate = new Date(now);
+          startDate.setDate(now.getDate() - dayOfWeek);
+          startDate.setHours(0, 0, 0, 0);
+        } else if (createdAt === "month") {
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        }
+  
+        if (startDate) {
+          filter.createdAt = { $gte: startDate };
+        }
+      }
+  
+      // Deadline filter
+      filter.deadline = { $gte: new Date() };
+  
       const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
   
       // Check cache first
@@ -273,11 +359,11 @@ export class FellowshipController {
       // }
   
       const [models, total] = await Promise.all([
-        FellowshipModel.find({ status: { $ne: "DELETED" } })
+        FellowshipModel.find(filter)
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        FellowshipModel.countDocuments({ status: { $ne: "DELETED" } }),
+        FellowshipModel.countDocuments(filter),
       ]);
   
       const result = {
@@ -294,7 +380,6 @@ export class FellowshipController {
       // Cache the result for 1 hour (3600 seconds)
       // await redis.setEx(key, 3600, JSON.stringify(result));
       res.status(200).json(result);
-  
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

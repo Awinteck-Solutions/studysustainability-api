@@ -297,6 +297,50 @@ export class FreeCourseController {
   }
 
   //public
+  // static async getAllPublic(req: Request, res: Response) {
+  //   try {
+  //     const page = parseInt(req.query.page as string) || 1;
+  //     const limit = parseInt(req.query.limit as string) || 10;
+  //     const skip = (page - 1) * limit;
+  
+  //     const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
+  
+  //     // Check cache first
+  //     // const cachedData = await redis.get(key);
+  //     // if (cachedData) {
+  //     //   console.log("✅ Returning cached data");
+  //     //   return res.json(JSON.parse(cachedData));
+  //     // }
+  
+  //     const [models, total] = await Promise.all([
+  //       FreeCourseModel.find({ status: { $ne: "DELETED" } })
+  //         .sort({ createdAt: -1 })
+  //         .skip(skip)
+  //         .limit(limit),
+  //       FreeCourseModel.countDocuments({ status: { $ne: "DELETED" } }),
+  //     ]);
+  
+  //     const result = {
+  //       message: "Data found",
+  //       response: models,
+  //       pagination: {
+  //         total,
+  //         page,
+  //         limit,
+  //         totalPages: Math.ceil(total / limit),
+  //       },
+  //     };
+  
+  //     // Cache the result for 1 hour (3600 seconds)
+  //     // await redis.setEx(key, 3600, JSON.stringify(result));
+  
+  //     res.status(200).json(result);
+  //   } catch (error) {
+  //     console.log("error :>> ", error);
+  //     res.status(400).json({ error: error.message });
+  //   }
+  // }
+  
   static async getAllPublic(req: Request, res: Response) {
     try {
       const page = parseInt(req.query.page as string) || 1;
@@ -312,12 +356,47 @@ export class FreeCourseController {
       //   return res.json(JSON.parse(cachedData));
       // }
   
+      // Construct filter object
+      const query: any = {
+        status: { $ne: "DELETED" },
+      };
+  
+      // Search
+      const search = req.query.search as string;
+      if (search) {
+        query.$or = [
+          { titleOfCourse: { $regex: search, $options: "i" } },
+          { nameOfInstitution: { $regex: search, $options: "i" } },
+          { aboutCourse: { $regex: search, $options: "i" } },
+        ];
+      }
+  
+      // Filters
+      if (req.query.discipline) {
+        query.discipline = req.query.discipline;
+      }
+      if (req.query.language) {
+        query.language = req.query.language;
+      }
+      if (req.query.location) {
+        query.location = req.query.location;
+      }
+      if (req.query.assesment) {
+        query.assesment = req.query.assesment;
+      }
+      if (req.query.certificate) {
+        query.certificate = req.query.certificate;
+      }
+      if (req.query.duration) {
+        query.duration = req.query.duration;
+      }
+  
       const [models, total] = await Promise.all([
-        FreeCourseModel.find({ status: { $ne: "DELETED" } })
+        FreeCourseModel.find(query)
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        FreeCourseModel.countDocuments({ status: { $ne: "DELETED" } }),
+          FreeCourseModel.countDocuments(query),
       ]);
   
       const result = {
@@ -336,7 +415,7 @@ export class FreeCourseController {
   
       res.status(200).json(result);
     } catch (error) {
-      console.log("error :>> ", error);
+      console.log('error :>> ', error);
       res.status(400).json({ error: error.message });
     }
   }

@@ -227,13 +227,81 @@ export class GrantsController {
 
 
   // public
+  // static async getAllPublic(req: Request, res: Response) {
+  //   try {
+  //     const page = parseInt(req.query.page as string) || 1;
+  //     const limit = parseInt(req.query.limit as string) || 10;
+  //     const skip = (page - 1) * limit;
+  
+  //     const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
+  
+  //     // Check cache first
+  //     // const cachedData = await redis.get(key);
+  //     // if (cachedData) {
+  //     //   console.log("✅ Returning cached data");
+  //     //   return res.json(JSON.parse(cachedData));
+  //     // }
+  
+  //     const [models, total] = await Promise.all([
+  //       GrantsModel.find({ status: { $ne: "DELETED" } })
+  //         .sort({ createdAt: -1 })
+  //         .skip(skip)
+  //         .limit(limit),
+  //       GrantsModel.countDocuments({ status: { $ne: "DELETED" } }),
+  //     ]);
+  
+  //     const result = {
+  //       message: "Data found",
+  //       response: models,
+  //       pagination: {
+  //         total,
+  //         page,
+  //         limit,
+  //         totalPages: Math.ceil(total / limit),
+  //       },
+  //     };
+  
+  //     // Cache the result for 1 hour (3600 seconds)
+  //     // await redis.setEx(key, 3600, JSON.stringify(result));
+  
+  //     res.status(200).json(result);
+  //   } catch (error) {
+  //     res.status(400).json({ error: error.message });
+  //   }
+  // }
+  
   static async getAllPublic(req: Request, res: Response) {
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
   
-      const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
+      const {
+        search,
+        deadline,
+      } = req.query;
+  
+      const filter: any = {
+        status: { $ne: "DELETED" },
+      };
+  
+      // Search logic
+      if (search) {
+        const searchRegex = new RegExp(search as string, "i");
+        filter.$or = [
+          { titleOfGrant: searchRegex },
+          { summary: searchRegex },
+        ];
+      }
+  
+      
+      // Filter by deadline >= current date
+      const today = new Date();
+      if (deadline || true) {
+        filter.deadline = { $gte: today };
+      }
+  
+      // const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}&search=${search || ""}&location=${location || ""}`;
   
       // Check cache first
       // const cachedData = await redis.get(key);
@@ -243,11 +311,11 @@ export class GrantsController {
       // }
   
       const [models, total] = await Promise.all([
-        GrantsModel.find({ status: { $ne: "DELETED" } })
+        GrantsModel.find(filter)
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        GrantsModel.countDocuments({ status: { $ne: "DELETED" } }),
+        GrantsModel.countDocuments(filter),
       ]);
   
       const result = {

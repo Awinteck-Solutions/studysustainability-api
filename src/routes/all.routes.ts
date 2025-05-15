@@ -14,6 +14,8 @@ import grantsRoutes from '../FEATURES/GRANTS/route/grants.route';
 import jobsRoutes from '../FEATURES/JOBS/route/jobs.route';
 import professionalCourseRoutes from '../FEATURES/PROFESSIONAL_COURSE/route/professionalcourse.route';
 import scholarshipsRoutes from '../FEATURES/SCHOLARSHIPS/route/scholarships.route';
+import interestFormRoutes from '../FEATURES/INTERESTFORM/route/InterestForm.route';
+
 const Router = express.Router();
 
 /**
@@ -69,6 +71,7 @@ Router.use("/grants", grantsRoutes);
 Router.use("/jobs", jobsRoutes);
 Router.use("/professional-courses", professionalCourseRoutes);
 Router.use("/scholarships", scholarshipsRoutes);
+Router.use('/interest-form', interestFormRoutes);
 
 
 export { Router }

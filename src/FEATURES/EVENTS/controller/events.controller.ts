@@ -189,12 +189,11 @@ export class EventsController {
   static async getOne(req: Request, res: Response) {
     try {
       const key = req.originalUrl;
-      const cachedData = await redis.get(key);
-      if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json({message: "Data found", response: JSON.parse(cachedData)});
-      }
-
+      // const cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log("✅ Returning cached data");
+      //   return res.json({message: "Data found", response: JSON.parse(cachedData)});
+      // }
 
       const event = await EventsModel.findById(req.params.id);
 
@@ -202,7 +201,7 @@ export class EventsController {
         return res.status(404).json({error: "Event not found"});
       }
 
-      await redis.setEx(key, 3600, JSON.stringify(event));
+      // await redis.setEx(key, 3600, JSON.stringify(event));
 
       res.status(200).json({message: "Event found", response: event});
     } catch (error) {
@@ -219,9 +218,11 @@ export class EventsController {
         const cachedData = await redis.get(key);
         if (cachedData) {
           console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+          return res.json({
+            message: "Data found",
+            response: JSON.parse(cachedData),
+          });
         }
-
 
         const models = await EventsModel.find({
           status: {$ne: "DELETED"},
@@ -229,8 +230,8 @@ export class EventsController {
 
         console.log("models :>> ", models);
 
-         // Cache the result for 1 hour (3600 seconds)
-         await redis.setEx(key, 3600, JSON.stringify(models));
+        // Cache the result for 1 hour (3600 seconds)
+        await redis.setEx(key, 3600, JSON.stringify(models));
         res.status(200).json({message: "Events Data found", response: models});
       } else {
         const key = req.originalUrl;
@@ -238,7 +239,10 @@ export class EventsController {
         const cachedData = await redis.get(key);
         if (cachedData) {
           console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+          return res.json({
+            message: "Data found",
+            response: JSON.parse(cachedData),
+          });
         }
 
         const models = await EventsModel.find({
@@ -248,8 +252,8 @@ export class EventsController {
 
         console.log("models 2:>> ", models);
 
-         // Cache the result for 1 hour (3600 seconds)
-         await redis.setEx(key, 3600, JSON.stringify(models));
+        // Cache the result for 1 hour (3600 seconds)
+        await redis.setEx(key, 3600, JSON.stringify(models));
         res.status(200).json({message: "Events Data found", response: models});
       }
     } catch (error) {
@@ -294,49 +298,120 @@ export class EventsController {
     }
   }
 
+  // PUBLIC ENDPOINT
+  // static async getAllPublic(req: Request, res: Response) {
+  //   try {
+  //     const page = parseInt(req.query.page as string) || 1;
+  //     const limit = parseInt(req.query.limit as string) || 10;
+  //     const skip = (page - 1) * limit;
+  //     const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
 
-// PUBLIC ENDPOINT
-static async getAllPublic(req: Request, res: Response) {
-  try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
-    const skip = (page - 1) * limit;
-    const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
+  //     // Check cache first
+  //     // const cachedData = await redis.get(key);
+  //     // if (cachedData) {
+  //     //   console.log("✅ Returning cached data");
+  //     //   return res.json(JSON.parse(cachedData));
+  //     // }
 
-    // Check cache first
-    // const cachedData = await redis.get(key);
-    // if (cachedData) {
-    //   console.log("✅ Returning cached data");
-    //   return res.json(JSON.parse(cachedData));
-    // }
+  //     const [models, total] = await Promise.all([
+  //       EventsModel.find({ status: { $ne: "DELETED" } })
+  //         .sort({ createdAt: -1 })
+  //         .skip(skip)
+  //         .limit(limit),
+  //       EventsModel.countDocuments({ status: { $ne: "DELETED" } }),
+  //     ]);
 
-    const [models, total] = await Promise.all([
-      EventsModel.find({ status: { $ne: "DELETED" } })
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      EventsModel.countDocuments({ status: { $ne: "DELETED" } }),
-    ]);
+  //     const result = {
+  //       message: "Data found",
+  //       response: models,
+  //       pagination: {
+  //         total,
+  //         page,
+  //         limit,
+  //         totalPages: Math.ceil(total / limit),
+  //       },
+  //     };
 
-    const result = {
-      message: "Events Data found",
-      response: models,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+  //     // Cache the result for 1 hour (3600 seconds)
+  //     // await redis.setEx(key, 3600, JSON.stringify(result));
+  //     res.status(200).json(result);
 
-    // Cache the result for 1 hour (3600 seconds)
-    // await redis.setEx(key, 3600, JSON.stringify(result));
-    res.status(200).json(result);
+  //   } catch (error: any) {
+  //     res.status(400).json({ error: error.message });
+  //   }
+  // }
 
-  } catch (error: any) {
-    res.status(400).json({ error: error.message });
+  static async getAllPublic(req: Request, res: Response) {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+      const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
+
+      const {search, eventType, deliveryFormat, fees} = req.query;
+
+      const filter: any = {
+        status: {$ne: "DELETED"},
+      };
+
+      // Search
+      if (search) {
+        const searchRegex = new RegExp(search as string, "i");
+        filter.$or = [
+          {nameOfProvider: searchRegex},
+          {titleOfEvent: searchRegex},
+          {summary: searchRegex},
+        ];
+      }
+
+      // Filters
+      if (eventType) {
+        filter.eventType = eventType;
+      }
+
+      if (deliveryFormat) {
+        filter.deliveryFormat = deliveryFormat;
+      }
+
+      if (fees) {
+        if (fees === "free") {
+          filter.fees = 0 || '';
+        } else if (fees === "paid") {
+          filter.fees = {$gt: 0};
+        }
+      }
+
+      // Deadline filter: only events with upcoming deadlines
+      filter.deadline = {$gte: new Date()};
+
+      // Check cache first
+      // const cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log("✅ Returning cached data");
+      //   return res.json(JSON.parse(cachedData));
+      // }
+
+      const [models, total] = await Promise.all([
+        EventsModel.find(filter).sort({createdAt: -1}).skip(skip).limit(limit),
+        EventsModel.countDocuments(filter),
+      ]);
+
+      const result = {
+        message: "Data found",
+        response: models,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+
+      // Cache the result for 1 hour (3600 seconds)
+      // await redis.setEx(key, 3600, JSON.stringify(result));
+      res.status(200).json(result);
+    } catch (error: any) {
+      res.status(400).json({error: error.message});
+    }
   }
-}
-
-
 }

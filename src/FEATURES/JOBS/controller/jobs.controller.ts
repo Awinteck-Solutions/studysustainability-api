@@ -273,6 +273,49 @@ export class JobsController {
 
 
   // Public
+  // static async getAllPublic(req: Request, res: Response) {
+  //   try {
+  //     const page = parseInt(req.query.page as string) || 1;
+  //     const limit = parseInt(req.query.limit as string) || 10;
+  //     const skip = (page - 1) * limit;
+  
+  //     const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
+  
+  //     // Check cache first
+  //     // const cachedData = await redis.get(key);
+  //     // if (cachedData) {
+  //     //   console.log("✅ Returning cached data");
+  //     //   return res.json(JSON.parse(cachedData));
+  //     // }
+  
+  //     const [models, total] = await Promise.all([
+  //       JobsModel.find({ status: { $ne: "DELETED" } })
+  //         .sort({ createdAt: -1 })
+  //         .skip(skip)
+  //         .limit(limit),
+  //       JobsModel.countDocuments({ status: { $ne: "DELETED" } }),
+  //     ]);
+  
+  //     const result = {
+  //       message: "Data found",
+  //       response: models,
+  //       pagination: {
+  //         total,
+  //         page,
+  //         limit,
+  //         totalPages: Math.ceil(total / limit),
+  //       },
+  //     };
+  
+  //     // Cache the result for 1 hour (3600 seconds)
+  //     // await redis.setEx(key, 3600, JSON.stringify(result));
+  
+  //     res.status(200).json(result);
+  //   } catch (error) {
+  //     res.status(400).json({ error: error.message });
+  //   }
+  // }
+
   static async getAllPublic(req: Request, res: Response) {
     try {
       const page = parseInt(req.query.page as string) || 1;
@@ -288,12 +331,58 @@ export class JobsController {
       //   return res.json(JSON.parse(cachedData));
       // }
   
+      const query: any = {
+        status: { $ne: "DELETED" },
+      };
+  
+      // Search
+      const search = req.query.search as string;
+      if (search) {
+        query.$or = [
+          { jobTitle: { $regex: search, $options: "i" } },
+          { jobDescription: { $regex: search, $options: "i" } },
+          { employer: { $regex: search, $options: "i" } },
+        ];
+      }
+  
+      // Filters
+      if (req.query.jobCategory) {
+        query.jobCategory = req.query.jobCategory;
+      }
+      if (req.query.jobType) {
+        query.jobType = req.query.jobType;
+      }
+      if (req.query.workPreference) {
+        query.workPreference = req.query.workPreference;
+      }
+      if (req.query.experienceLevel) {
+        query.experienceLevel = req.query.experienceLevel;
+      }
+      if (req.query.location) {
+        query.location = req.query.location;
+      }
+  
+      // Filter by datePosted >= today
+      const today = new Date();
+      if (req.query.datePosted || true) {
+        query.datePosted = { $gte: today };
+      }
+  
+      // Salary Range
+      const minSalary = parseFloat(req.query.minSalary as string);
+      const maxSalary = parseFloat(req.query.maxSalary as string);
+      if (!isNaN(minSalary) || !isNaN(maxSalary)) {
+        query.salary = {};
+        if (!isNaN(minSalary)) query.salary.$gte = minSalary;
+        if (!isNaN(maxSalary)) query.salary.$lte = maxSalary;
+      }
+  
       const [models, total] = await Promise.all([
-        JobsModel.find({ status: { $ne: "DELETED" } })
+        JobsModel.find(query)
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        JobsModel.countDocuments({ status: { $ne: "DELETED" } }),
+        JobsModel.countDocuments(query),
       ]);
   
       const result = {
@@ -315,5 +404,7 @@ export class JobsController {
       res.status(400).json({ error: error.message });
     }
   }
+  
+  
   
 }
