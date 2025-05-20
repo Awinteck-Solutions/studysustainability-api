@@ -347,10 +347,8 @@ export class ScholarshipsController {
         query.scholarshipType = req.query.scholarshipType;
       }
   
-      // Filter by deadline >= current date
-      const today = new Date();
-      if (req.query.deadline || true) {
-        query.deadline = { $gte: today };
+      if (req.query.deadline) {
+        query.deadline = { $gte: req.query.deadline  };
       }
   
       const [models, total] = await Promise.all([

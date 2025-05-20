@@ -296,9 +296,8 @@ export class GrantsController {
   
       
       // Filter by deadline >= current date
-      const today = new Date();
-      if (deadline || true) {
-        filter.deadline = { $gte: today };
+      if (deadline) {
+        filter.deadline = { $gte: deadline  };
       }
   
       // const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}&search=${search || ""}&location=${location || ""}`;

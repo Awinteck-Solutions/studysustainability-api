@@ -74,12 +74,19 @@ Router.get("/public", (req: Request, res: Response) => {
     }
 );
 
+Router.get("/migrate",
+    (req: Request, res: Response) => {
+        JobsController.migrateSalaryToNumber(req, res)
+    }
+);
 
 Router.get("/:id",
     (req: Request, res: Response) => {
         JobsController.getOne(req, res)
     }
 );
+
+
 
 
 

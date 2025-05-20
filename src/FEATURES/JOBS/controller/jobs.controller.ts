@@ -132,9 +132,9 @@ export class JobsController {
       }
       // Save the updated job
       const updatedJob = await existingJob.save();
-            let key = '/jobs/'
-            redis.del(key)
-            redis.del(`${key}${req.params.id}`)
+      let key = "/jobs/";
+      redis.del(key);
+      redis.del(`${key}${req.params.id}`);
       res
         .status(200)
         .json({message: "Job updated successfully", response: updatedJob});
@@ -183,7 +183,7 @@ export class JobsController {
         return res.status(404).json({error: "Job not found"});
       }
 
-       // Cache the result for 1 hour (3600 seconds)
+      // Cache the result for 1 hour (3600 seconds)
       //  await redis.setEx(key, 3600, JSON.stringify(job));
       res.status(200).json({message: "Job found", response: job});
     } catch (error) {
@@ -200,14 +200,17 @@ export class JobsController {
         const cachedData = await redis.get(key);
         if (cachedData) {
           console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+          return res.json({
+            message: "Data found",
+            response: JSON.parse(cachedData),
+          });
         }
         const models = await JobsModel.find({
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
-           // Cache the result for 1 hour (3600 seconds)
-           await redis.setEx(key, 3600, JSON.stringify(models));
+        // Cache the result for 1 hour (3600 seconds)
+        await redis.setEx(key, 3600, JSON.stringify(models));
         res.status(200).json({message: "Data found", response: models});
       } else {
         const key = req.originalUrl;
@@ -215,15 +218,18 @@ export class JobsController {
         const cachedData = await redis.get(key);
         if (cachedData) {
           console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+          return res.json({
+            message: "Data found",
+            response: JSON.parse(cachedData),
+          });
         }
         const models = await JobsModel.find({
           author: new mongoose.Types.ObjectId(id),
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
-           // Cache the result for 1 hour (3600 seconds)
-           await redis.setEx(key, 3600, JSON.stringify(models));
+        // Cache the result for 1 hour (3600 seconds)
+        await redis.setEx(key, 3600, JSON.stringify(models));
         res.status(200).json({message: "Data found", response: models});
       }
     } catch (error) {
@@ -244,9 +250,9 @@ export class JobsController {
         return res.status(404).json({error: "Job not found"});
       }
 
-      let key = '/jobs/'
-      redis.del(key)
-      redis.del(`${key}${req.params.id}`)
+      let key = "/jobs/";
+      redis.del(key);
+      redis.del(`${key}${req.params.id}`);
 
       res
         .status(200)
@@ -271,23 +277,22 @@ export class JobsController {
     }
   }
 
-
   // Public
   // static async getAllPublic(req: Request, res: Response) {
   //   try {
   //     const page = parseInt(req.query.page as string) || 1;
   //     const limit = parseInt(req.query.limit as string) || 10;
   //     const skip = (page - 1) * limit;
-  
+
   //     const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
-  
+
   //     // Check cache first
   //     // const cachedData = await redis.get(key);
   //     // if (cachedData) {
   //     //   console.log("✅ Returning cached data");
   //     //   return res.json(JSON.parse(cachedData));
   //     // }
-  
+
   //     const [models, total] = await Promise.all([
   //       JobsModel.find({ status: { $ne: "DELETED" } })
   //         .sort({ createdAt: -1 })
@@ -295,7 +300,7 @@ export class JobsController {
   //         .limit(limit),
   //       JobsModel.countDocuments({ status: { $ne: "DELETED" } }),
   //     ]);
-  
+
   //     const result = {
   //       message: "Data found",
   //       response: models,
@@ -306,10 +311,10 @@ export class JobsController {
   //         totalPages: Math.ceil(total / limit),
   //       },
   //     };
-  
+
   //     // Cache the result for 1 hour (3600 seconds)
   //     // await redis.setEx(key, 3600, JSON.stringify(result));
-  
+
   //     res.status(200).json(result);
   //   } catch (error) {
   //     res.status(400).json({ error: error.message });
@@ -321,30 +326,30 @@ export class JobsController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
-  
-      const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
-  
+
+      // const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
+
       // Check cache first
       // const cachedData = await redis.get(key);
       // if (cachedData) {
       //   console.log("✅ Returning cached data");
       //   return res.json(JSON.parse(cachedData));
       // }
-  
+
       const query: any = {
-        status: { $ne: "DELETED" },
+        status: {$ne: "DELETED"},
       };
-  
+
       // Search
       const search = req.query.search as string;
       if (search) {
         query.$or = [
-          { jobTitle: { $regex: search, $options: "i" } },
-          { jobDescription: { $regex: search, $options: "i" } },
-          { employer: { $regex: search, $options: "i" } },
+          {jobTitle: {$regex: search, $options: "i"}},
+          {jobDescription: {$regex: search, $options: "i"}},
+          {employer: {$regex: search, $options: "i"}},
         ];
       }
-  
+
       // Filters
       if (req.query.jobCategory) {
         query.jobCategory = req.query.jobCategory;
@@ -361,13 +366,12 @@ export class JobsController {
       if (req.query.location) {
         query.location = req.query.location;
       }
-  
+
       // Filter by datePosted >= today
-      const today = new Date();
-      if (req.query.datePosted || true) {
-        query.datePosted = { $gte: today };
+      if (req.query.datePosted) {
+        query.datePosted = {$gte: req.query.datePosted};
       }
-  
+
       // Salary Range
       const minSalary = parseFloat(req.query.minSalary as string);
       const maxSalary = parseFloat(req.query.maxSalary as string);
@@ -376,15 +380,12 @@ export class JobsController {
         if (!isNaN(minSalary)) query.salary.$gte = minSalary;
         if (!isNaN(maxSalary)) query.salary.$lte = maxSalary;
       }
-  
+
       const [models, total] = await Promise.all([
-        JobsModel.find(query)
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(limit),
+        JobsModel.find(query).sort({createdAt: -1}).skip(skip).limit(limit),
         JobsModel.countDocuments(query),
       ]);
-  
+
       const result = {
         message: "Data found",
         response: models,
@@ -395,16 +396,32 @@ export class JobsController {
           totalPages: Math.ceil(total / limit),
         },
       };
-  
+
       // Cache the result for 1 hour (3600 seconds)
       // await redis.setEx(key, 3600, JSON.stringify(result));
-  
+
       res.status(200).json(result);
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({error: error.message});
     }
   }
-  
-  
-  
+
+  static async migrateSalaryToNumber(req: Request, res: Response) {
+    try {
+      const docs = await JobsModel.find({salary: {$type: "string"}});
+
+      for (let doc of docs) {
+        const numSalary = parseFloat(doc.salary?.toString());
+        // Optional: Skip if not a valid number
+        if (isNaN(numSalary)) continue;
+        doc.salary = numSalary;
+        await doc.save();
+      }
+
+      console.log("Migration complete.");
+    } catch (err) {
+      console.error("Migration error:", err);
+    }
+  }
+
 }

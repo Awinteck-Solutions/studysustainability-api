@@ -359,7 +359,7 @@ export class ProfessionalCourseController {
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
   
-      const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
+      // const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
   
       // Check cache first
       // const cachedData = await redis.get(key);
@@ -375,26 +375,27 @@ export class ProfessionalCourseController {
       // Search
       const search = req.query.search as string;
       if (search) {
+        const regex = new RegExp(search as string, "i");
         query.$or = [
-          { nameOfCourse: { $regex: search, $options: "i" } },
-          { nameOfProvider: { $regex: search, $options: "i" } },
-          { aboutCourse: { $regex: search, $options: "i" } },
+          {nameOfCourse: regex},
+          {aboutCourse: regex},
+          {nameOfProvider: regex},
         ];
       }
   
       // Filters
-      if (req.query.discipline) {
-        query.discipline = req.query.discipline;
+      if (req.query.disciplineCategory) {
+        query.disciplineCategory = req.query.disciplineCategory;
       }
-      if (req.query.studyType) {
-        query.studyType = req.query.studyType;
+      if (req.query.industry) {
+        query.industry = req.query.industry;
       }
-      if (req.query.qualification) {
-        query.qualification = req.query.qualification;
+      if (req.query.language) {
+        query.language = req.query.language;
       }
-      if (req.query.institution) {
-        query.institution = req.query.institution;
-      }
+      // if (req.query.institution) {
+      //   query.institution = req.query.institution;
+      // }
       if (req.query.location) {
         query.location = req.query.location;
       }
@@ -402,10 +403,9 @@ export class ProfessionalCourseController {
         query.deliveryType = req.query.deliveryType;
       }
   
-      // Filter by startTerm >= today
-      const today = new Date();
-      if (req.query.startTerm || true) {
-        query.startTerm = { $gte: today };
+      // Filter by dates
+      if (req.query.dates) {
+        query.dates = { $gte: new Date(req.query.dates as string)  };
       }
   
       const [models, total] = await Promise.all([
@@ -413,7 +413,7 @@ export class ProfessionalCourseController {
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        ProfessionalCourseModel.countDocuments(query),
+          ProfessionalCourseModel.countDocuments(query),
       ]);
   
       const result = {

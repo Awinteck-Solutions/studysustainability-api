@@ -44,7 +44,7 @@ const JobsSchema = new mongoose.Schema(
       },
       location: { type: String, required: false }, // City
       country: { type: String, required: false }, // Country
-      salary: { type: String, required: false }, // Salary value
+      salary: { type: Number, required: false }, // Salary value
       salaryRange: { type: String, required: false }, // Range format e.g. "$50,000 - $70,000"
       datePosted: { type: Date, default: Date.now },
       aboutCompany: { type: String, required: false },

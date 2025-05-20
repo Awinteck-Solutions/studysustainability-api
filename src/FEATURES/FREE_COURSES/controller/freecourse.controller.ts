@@ -381,14 +381,17 @@ export class FreeCourseController {
       if (req.query.location) {
         query.location = req.query.location;
       }
-      if (req.query.assesment) {
-        query.assesment = req.query.assesment;
+      if (req.query.assessment) {
+        query.assessment = req.query.assessment;
       }
       if (req.query.certificate) {
         query.certificate = req.query.certificate;
       }
       if (req.query.duration) {
         query.duration = req.query.duration;
+      }
+      if (req.query.delivery) {
+        query.delivery = req.query.delivery;
       }
   
       const [models, total] = await Promise.all([

@@ -347,7 +347,7 @@ export class FellowshipController {
       }
   
       // Deadline filter
-      filter.deadline = { $gte: new Date() };
+      // filter.deadline = { $gte: new Date() };
   
       const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
   

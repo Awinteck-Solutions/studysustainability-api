@@ -390,10 +390,15 @@ export class UniProgramsController {
       if (deliveryType) query.delivery = deliveryType;
 
       // Filter for upcoming startTerm (date comparison)
-      if (startTerm === "upcoming") {
-        query.startTerm = {$gte: new Date()};
-      } else if (startTerm) {
-        query.startTerm = startTerm;
+      // if (startTerm === "upcoming") {
+      //   query.startTerm = {$gte: new Date()};
+      // } else if (startTerm) {
+      //   query.startTerm = startTerm;
+      // }
+
+      const today = new Date();
+      if (req.query.startTerm) {
+        query.startTerm = { $gte: new Date(req.query.startTerm as string)  };
       }
 
       // Search limited to 'title' and 'description'
