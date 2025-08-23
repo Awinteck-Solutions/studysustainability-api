@@ -3,7 +3,7 @@ import * as multer from "multer";
 import ProfessionalCourseModel from "../schema/professionalcourse.schema";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
-import redis from "../../../util/redis";
+import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
 
 interface MulterRequest extends Request {
   file: multer.File;
@@ -70,6 +70,9 @@ export class ProfessionalCourseController {
 
       const newCourse = new ProfessionalCourseModel(course);
       await newCourse.save();
+
+      // Invalidate cache after creating new course
+      await invalidateCache('PROFESSIONAL_COURSES');
 
       res
         .status(201)
@@ -154,9 +157,9 @@ export class ProfessionalCourseController {
       }
       // Save the updated course
       const updatedCourse = await existingCourse.save();
-      let key = '/professional-courses/'
-      redis.del(key)
-      redis.del(`${key}${req.params.id}`)
+      
+      // Invalidate cache after updating course
+      await invalidateCache(req.params.id);
       res
         .status(200)
         .json({
@@ -181,6 +184,10 @@ export class ProfessionalCourseController {
       if (req.file) {
         course.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
         await course.save(); // Save the updated course
+        
+        // Invalidate cache after updating image
+        await invalidateCache(req.params.id);
+        
         res
           .status(201)
           .json({
@@ -197,12 +204,12 @@ export class ProfessionalCourseController {
 
   static async getOne(req: Request, res: Response) {
     try {
-      const key = req.originalUrl;
+      const key = CACHE_KEYS.PROFESSIONAL_COURSES.BY_ID(req.params.id);
       // Check cache first
-      const cachedData = await redis.get(key);
+      const cachedData = await getCachedData(key);
       if (cachedData) {
         console.log("✅ Returning cached data");
-        return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        return res.json({message: "Data found", response: cachedData});
       }
       const course = await ProfessionalCourseModel.findById(req.params.id);
 
@@ -210,9 +217,8 @@ export class ProfessionalCourseController {
         return res.status(404).json({error: "Professional course not found"});
       }
 
-
-         // Cache the result for 1 hour (3600 seconds)
-         await redis.setEx(key, 3600, JSON.stringify(course));
+      // Cache the result
+      await setCachedData(key, course, CACHE_DURATION.MEDIUM);
       res
         .status(200)
         .json({message: "Professional course found", response: course});
@@ -225,29 +231,28 @@ export class ProfessionalCourseController {
     try {
       const {id, role} = req["currentUser"];
       if (role == Roles.ADMIN) {
-        const key = req.originalUrl;
+        const key = CACHE_KEYS.PROFESSIONAL_COURSES.ALL;
         // Check cache first
-        const cachedData = await redis.get(key);
+        const cachedData = await getCachedData(key);
         if (cachedData) {
           console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+          return res.json({message: "Data found", response: cachedData});
         }
 
         const models = await ProfessionalCourseModel.find({
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
-
-         // Cache the result for 1 hour (3600 seconds)
-         await redis.setEx(key, 3600, JSON.stringify(models));
+        // Cache the result
+        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
         res.status(200).json({message: "Data found", response: models});
       } else {
-        const key = req.originalUrl;
+        const key = getUserCacheKey(CACHE_KEYS.PROFESSIONAL_COURSES.ALL, id);
         // Check cache first
-        const cachedData = await redis.get(key);
+        const cachedData = await getCachedData(key);
         if (cachedData) {
           console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+          return res.json({message: "Data found", response: cachedData});
         }
 
         const models = await ProfessionalCourseModel.find({
@@ -255,9 +260,8 @@ export class ProfessionalCourseController {
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
-
-         // Cache the result for 1 hour (3600 seconds)
-         await redis.setEx(key, 3600, JSON.stringify(models));
+        // Cache the result
+        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
         res.status(200).json({message: "Data found", response: models});
       }
     } catch (error) {
@@ -278,9 +282,8 @@ export class ProfessionalCourseController {
         return res.status(404).json({error: "Course not found"});
       }
 
-      let key = '/professional-courses/'
-      redis.del(key)
-      redis.del(`${key}${req.params.id}`)
+      // Invalidate cache after soft deletion
+      await invalidateCache('PROFESSIONAL_COURSES', req.params.id);
       res
         .status(200)
         .json({message: "Course status updated to DELETED", response: course});
@@ -300,6 +303,9 @@ export class ProfessionalCourseController {
         return res.status(404).json({error: "Course not found"});
       }
 
+      // Invalidate cache after permanent deletion
+      await invalidateCache('PROFESSIONAL_COURSES', req.params.id);
+
       res.status(200).json({message: "Course successfully deleted"});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -315,23 +321,23 @@ export class ProfessionalCourseController {
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
   
-      const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
-  
+            const key = CACHE_KEYS.PROFESSIONAL_COURSES.PUBLIC(page, limit);
+
       // Check cache first
-      const cachedData = await redis.get(key);
+      const cachedData = await getCachedData(key);
       if (cachedData) {
         console.log("✅ Returning cached data");
-        return res.json(JSON.parse(cachedData));
+        return res.json(cachedData);
       }
   
       const [models, total] = await Promise.all([
         ProfessionalCourseModel.find({
-          status: { $ne: "DELETED" },
+          status: "ACTIVE",
         })
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        ProfessionalCourseModel.countDocuments({ status: { $ne: "DELETED" } }),
+        ProfessionalCourseModel.countDocuments({ status: "ACTIVE" }),
       ]);
   
       const result = {
@@ -345,8 +351,8 @@ export class ProfessionalCourseController {
         },
       };
   
-      // Cache the result for 1 hour (3600 seconds)
-      await redis.setEx(key, 3600, JSON.stringify(result));
+      // Cache the result
+      await setCachedData(key, result, CACHE_DURATION.MEDIUM);
   
       res.status(200).json(result);
     } catch (error) {

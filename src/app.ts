@@ -8,9 +8,7 @@ import * as dotenv from 'dotenv';
 import { errorHandler } from "./middlewares/errorHandler.middleware";
 import * as cors from 'cors';
 import path = require("path");
-import connectToDatabase from "./database/data-source";
-const swaggerUi = require("swagger-ui-express");
-const swaggerDocument = require("./swagger-output.json"); 
+import connectToDatabase from "./database/data-source"; 
 
 
 dotenv.config();
@@ -22,7 +20,7 @@ app.use(errorHandler)
 app.use(Router)
 
 
-app.use("/swagger", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 

@@ -16,48 +16,14 @@ import professionalCourseRoutes from '../FEATURES/PROFESSIONAL_COURSE/route/prof
 import scholarshipsRoutes from '../FEATURES/SCHOLARSHIPS/route/scholarships.route';
 const Router = express.Router();
 
-/**
- * @swagger
- * /auth:
- *   get:
- *     summary: Authentication routes
- */
 Router.use("/auth", authRoutes);
 
-/**
- * @swagger
- * /users:
- *   get:
- *     summary: User routes
- */
 Router.use("/users", userRoutes);
 
 Router.use('/admin-management',adminRoutes)
 
 
 
-/**
- * @swagger
- * tags:
- *   - name: [Users]
- *     description: User management endpoints
- */
-
-/**
- * @swagger
- * /admins:
- *   get:
- *     summary: Returns a list of admins
- *     tags: [Users]
- *     responses:
- *       200:
- *         description: A list of admins
- *         content:
- *           application/json:
- *             example:
- *               - id: 1
- *                 name: Admin User
- */
 Router.use("/university-programs", uniprogramsRoutes);
 
 

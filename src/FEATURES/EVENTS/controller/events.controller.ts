@@ -3,7 +3,7 @@ import * as multer from "multer";
 import EventsModel from "../schema/events.schema";
 import mongoose from "mongoose";
 import {Roles} from "../../AUTH/enums/roles.enum";
-import redis from "../../../util/redis";
+import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
 
 interface MulterRequest extends Request {
   file: multer.File;
@@ -73,6 +73,9 @@ export class EventsController {
       // Create a new Event model and save it
       const newEvent = new EventsModel(eventData);
       await newEvent.save();
+
+      // Invalidate cache after creating new event
+      await invalidateCache('EVENTS');
 
       res
         .status(201)
@@ -152,9 +155,8 @@ export class EventsController {
       // Save the updated Event model
       const updatedEvent = await existingEvent.save();
 
-      let key = "/events/";
-      redis.del(key);
-      redis.del(`${key}${req.params.id}`);
+      // Invalidate cache after updating event
+      await invalidateCache('EVENTS', req.params.id);
 
       res.status(200).json({message: "Event updated", response: updatedEvent});
     } catch (error) {
@@ -188,11 +190,10 @@ export class EventsController {
 
   static async getOne(req: Request, res: Response) {
     try {
-      const key = req.originalUrl;
-      const cachedData = await redis.get(key);
+      const key = CACHE_KEYS.EVENTS.BY_ID(req.params.id);
+      const cachedData = await getCachedData(key);
       if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        return res.json({message: "Data found", response: cachedData});
       }
 
 
@@ -202,7 +203,7 @@ export class EventsController {
         return res.status(404).json({error: "Event not found"});
       }
 
-      await redis.setEx(key, 3600, JSON.stringify(event));
+      await setCachedData(key, event, CACHE_DURATION.MEDIUM);
 
       res.status(200).json({message: "Event found", response: event});
     } catch (error) {
@@ -214,12 +215,11 @@ export class EventsController {
     try {
       const {id, role} = req["currentUser"];
       if (role == Roles.ADMIN) {
-        const key = req.originalUrl;
+        const key = CACHE_KEYS.EVENTS.ALL;
         // Check cache first
-        const cachedData = await redis.get(key);
+        const cachedData = await getCachedData(key);
         if (cachedData) {
-          console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+          return res.json({message: "Data found", response: cachedData});
         }
 
 
@@ -229,16 +229,15 @@ export class EventsController {
 
         console.log("models :>> ", models);
 
-         // Cache the result for 1 hour (3600 seconds)
-         await redis.setEx(key, 3600, JSON.stringify(models));
+         // Cache the result for 1 hour
+         await setCachedData(key, models, CACHE_DURATION.MEDIUM);
         res.status(200).json({message: "Events Data found", response: models});
       } else {
-        const key = req.originalUrl;
+        const key = getUserCacheKey(CACHE_KEYS.EVENTS.ALL, id);
         // Check cache first
-        const cachedData = await redis.get(key);
+        const cachedData = await getCachedData(key);
         if (cachedData) {
-          console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+          return res.json({message: "Data found", response: cachedData});
         }
 
         const models = await EventsModel.find({
@@ -248,8 +247,8 @@ export class EventsController {
 
         console.log("models 2:>> ", models);
 
-         // Cache the result for 1 hour (3600 seconds)
-         await redis.setEx(key, 3600, JSON.stringify(models));
+         // Cache the result for 1 hour
+         await setCachedData(key, models, CACHE_DURATION.MEDIUM);
         res.status(200).json({message: "Events Data found", response: models});
       }
     } catch (error) {
@@ -270,9 +269,8 @@ export class EventsController {
         return res.status(404).json({error: "Event not found"});
       }
 
-      let key = "/events/";
-      redis.del(key);
-      redis.del(`${key}${req.params.id}`);
+      // Invalidate cache after soft deletion
+      await invalidateCache('EVENTS', req.params.id);
       res.status(200).json({message: "Event status updated to DELETED", event});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -288,6 +286,9 @@ export class EventsController {
         return res.status(404).json({error: "Event not found"});
       }
 
+      // Invalidate cache after permanent deletion
+      await invalidateCache('EVENTS', req.params.id);
+
       res.status(200).json({message: "Event successfully deleted"});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -301,21 +302,20 @@ static async getAllPublic(req: Request, res: Response) {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
-    const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
+    const key = CACHE_KEYS.EVENTS.PUBLIC(page, limit);
 
     // Check cache first
-    const cachedData = await redis.get(key);
+    const cachedData = await getCachedData(key);
     if (cachedData) {
-      console.log("✅ Returning cached data");
-      return res.json(JSON.parse(cachedData));
+      return res.json(cachedData);
     }
 
     const [models, total] = await Promise.all([
-      EventsModel.find({ status: { $ne: "DELETED" } })
+      EventsModel.find({ status: "ACTIVE" })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      EventsModel.countDocuments({ status: { $ne: "DELETED" } }),
+      EventsModel.countDocuments({ status: "ACTIVE" }),
     ]);
 
     const result = {
@@ -329,8 +329,8 @@ static async getAllPublic(req: Request, res: Response) {
       },
     };
 
-    // Cache the result for 1 hour (3600 seconds)
-    await redis.setEx(key, 3600, JSON.stringify(result));
+    // Cache the result for 1 hour
+    await setCachedData(key, result, CACHE_DURATION.MEDIUM);
     res.status(200).json(result);
 
   } catch (error: any) {

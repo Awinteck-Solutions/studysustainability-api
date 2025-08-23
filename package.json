@@ -24,18 +24,14 @@
       "dotenv": "^16.4.5",
       "express": "^4.21.1",
       "express-session": "^1.18.1",
-      "ioredis": "^5.6.0",
       "jsonwebtoken": "^9.0.2",
       "mongoose": "^8.9.5",
-      "multer": "^1.4.5-lts.1",
+      "multer": "^2.0.2",
       "mysql2": "^3.11.3",
       "nodemailer": "^6.9.16",
       "redis": "^4.7.0",
       "reflect-metadata": "^0.1.13",
       "sanitize-html": "^2.14.0",
-      "swagger-autogen": "^2.23.7",
-      "swagger-jsdoc": "^6.2.8",
-      "swagger-ui-express": "^5.0.1",
       "typeorm": "^0.3.20",
       "uuid": "^10.0.0"
    },
@@ -44,7 +40,6 @@
       "build": "tsc",
       "dev": "nodemon src/app.ts",
       "type-start": "ts-node src/app.ts",
-      "typeorm": "typeorm-ts-node-commonjs",
-      "generate-swagger": "nodemon --watch src/routes --exec npx ts-node src/swagger.config.ts"
+      "typeorm": "typeorm-ts-node-commonjs"
    }
 }

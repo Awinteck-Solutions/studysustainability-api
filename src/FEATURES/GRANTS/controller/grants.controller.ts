@@ -3,7 +3,7 @@ import * as multer from "multer";
 import GrantsModel from "../schema/grants.schema";
 import mongoose from "mongoose";
 import {Roles} from "../../AUTH/enums/roles.enum";
-import redis from "../../../util/redis";
+import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
 
 interface MulterRequest extends Request {
   file: multer.File;
@@ -44,6 +44,9 @@ export class GrantsController {
 
       const newGrant = new GrantsModel(grant);
       await newGrant.save();
+
+      // Invalidate cache after creating new grant
+      await invalidateCache('GRANTS');
 
       res
         .status(201)
@@ -87,9 +90,9 @@ export class GrantsController {
       }
       // Save the updated grant
       const updatedGrant = await existingGrant.save();
-      let key = "/grants/";
-      redis.del(key);
-      redis.del(`${key}${req.params.id}`);
+
+      // Invalidate cache after updating grant
+      await invalidateCache('GRANTS', req.params.id);
       res
         .status(200)
         .json({message: "Grant updated successfully", response: updatedGrant});
@@ -124,11 +127,11 @@ export class GrantsController {
 
   static async getOne(req: Request, res: Response) {
     try {
-      const key = req.originalUrl;
-      const cachedData = await redis.get(key);
+      const key = CACHE_KEYS.GRANTS.BY_ID(req.params.id);
+      const cachedData = await getCachedData(key);
       if (cachedData) {
         console.log("✅ Returning cached data");
-        return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        return res.json({message: "Data found", response: cachedData});
       }
 
       const grant = await GrantsModel.findById(req.params.id);
@@ -137,7 +140,7 @@ export class GrantsController {
         return res.status(404).json({error: "Grant not found"});
       }
 
-      await redis.setEx(key, 3600, JSON.stringify(grant));
+      await setCachedData(key, grant, CACHE_DURATION.MEDIUM);
       res.status(200).json({message: "Grant found", response: grant});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -148,28 +151,28 @@ export class GrantsController {
     try {
       const {id, role} = req["currentUser"];
       if (role == Roles.ADMIN) {
-        const key = req.originalUrl;
+        const key = CACHE_KEYS.GRANTS.ALL;
         // Check cache first
-        const cachedData = await redis.get(key);
+        const cachedData = await getCachedData(key);
         if (cachedData) {
           console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+          return res.json({message: "Data found", response: cachedData});
         }
 
         const models = await GrantsModel.find({
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
-        // Cache the result for 1 hour (3600 seconds)
-        await redis.setEx(key, 3600, JSON.stringify(models));
+        // Cache the result
+        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
         res.status(200).json({message: "Data found", response: models});
       } else {
-        const key = req.originalUrl;
+        const key = getUserCacheKey(CACHE_KEYS.GRANTS.ALL, id);
         // Check cache first
-        const cachedData = await redis.get(key);
+        const cachedData = await getCachedData(key);
         if (cachedData) {
           console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+          return res.json({message: "Data found", response: cachedData});
         }
         
         const models = await GrantsModel.find({
@@ -177,8 +180,8 @@ export class GrantsController {
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
-         // Cache the result for 1 hour (3600 seconds)
-         await redis.setEx(key, 3600, JSON.stringify(models));
+         // Cache the result
+         await setCachedData(key, models, CACHE_DURATION.MEDIUM);
         res.status(200).json({message: "Data found", response: models});
       }
     } catch (error) {
@@ -199,9 +202,8 @@ export class GrantsController {
         return res.status(404).json({error: "Grant not found"});
       }
 
-      let key = "/grants/";
-      redis.del(key);
-      redis.del(`${key}${req.params.id}`);
+      // Invalidate cache after soft deletion
+      await invalidateCache('GRANTS', req.params.id);
       res
         .status(200)
         .json({message: "Grant status updated to DELETED", response: grant});
@@ -233,21 +235,21 @@ export class GrantsController {
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
   
-      const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
-  
+            const key = CACHE_KEYS.GRANTS.PUBLIC(page, limit);
+
       // Check cache first
-      const cachedData = await redis.get(key);
+      const cachedData = await getCachedData(key);
       if (cachedData) {
         console.log("✅ Returning cached data");
-        return res.json(JSON.parse(cachedData));
+        return res.json(cachedData);
       }
   
       const [models, total] = await Promise.all([
-        GrantsModel.find({ status: { $ne: "DELETED" } })
+        GrantsModel.find({ status: "ACTIVE" })
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        GrantsModel.countDocuments({ status: { $ne: "DELETED" } }),
+        GrantsModel.countDocuments({ status: "ACTIVE" }),
       ]);
   
       const result = {
@@ -261,8 +263,8 @@ export class GrantsController {
         },
       };
   
-      // Cache the result for 1 hour (3600 seconds)
-      await redis.setEx(key, 3600, JSON.stringify(result));
+      // Cache the result
+      await setCachedData(key, result, CACHE_DURATION.MEDIUM);
   
       res.status(200).json(result);
     } catch (error) {

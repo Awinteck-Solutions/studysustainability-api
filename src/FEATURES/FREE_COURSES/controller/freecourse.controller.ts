@@ -3,9 +3,7 @@ import * as multer from "multer";
 import FreeCourseModel from "../schema/freecourse.schema";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
-import redis from "../../../util/redis";
-// const Redis = require("ioredis");
-// const redis = new Redis();
+import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
 
 interface MulterRequest extends Request {
   file: multer.File;
@@ -64,6 +62,9 @@ export class FreeCourseController {
       // Create a new FreeCourse model and save it
       const newFreeCourse = new FreeCourseModel(freeCourseData);
       await newFreeCourse.save();
+
+      // Invalidate cache after creating new free course
+      await invalidateCache('FREE_COURSES');
 
       res.status(201).json({
         message: "Free Course created successfully",
@@ -140,9 +141,9 @@ export class FreeCourseController {
       }
       // Save the updated FreeCourse model
       const updatedFreeCourse = await existingFreeCourse.save();
-      let key = "/free-courses/";
-      redis.del(key);
-      redis.del(`${key}${req.params.id}`);
+      
+      // Invalidate cache after updating free course
+      await invalidateCache('FREE_COURSES', req.params.id);
 
       res
         .status(200)
@@ -165,6 +166,10 @@ export class FreeCourseController {
       if (req.file) {
         freeCourse.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
         await freeCourse.save(); // Save the updated model
+        
+        // Invalidate cache after updating image
+        await invalidateCache('FREE_COURSES', req.params.id);
+        
         res.status(201).json({
           message: "Free Course image updated successfully",
           response: freeCourse,
@@ -179,13 +184,12 @@ export class FreeCourseController {
 
   static async getOne(req: Request, res: Response) {
     try {
-      const key = req.originalUrl;
-      const cachedData = await redis.get(key);
+      const key = CACHE_KEYS.FREE_COURSES.BY_ID(req.params.id);
+      const cachedData = await getCachedData(key);
       if (cachedData) {
-        console.log("✅ Returning cached data");
         return res.json({
           message: "Data found",
-          response: JSON.parse(cachedData),
+          response: cachedData,
         });
       }
 
@@ -195,7 +199,7 @@ export class FreeCourseController {
         return res.status(404).json({error: "Free Course not found"});
       }
 
-      await redis.setEx(key, 3600, JSON.stringify(freeCourse));
+      await setCachedData(key, freeCourse, CACHE_DURATION.MEDIUM);
       res
         .status(200)
         .json({message: "Free Course found", response: freeCourse});
@@ -208,14 +212,13 @@ export class FreeCourseController {
     try {
       const {id, role} = req["currentUser"];
       if (role == Roles.ADMIN) {
-        const key = req.originalUrl;
+        const key = CACHE_KEYS.FREE_COURSES.ALL;
         // Check cache first
-        const cachedData = await redis.get(key);
+        const cachedData = await getCachedData(key);
         if (cachedData) {
-          console.log("✅ Returning cached data");
           return res.json({
             message: "Data found",
-            response: JSON.parse(cachedData),
+            response: cachedData,
           });
         }
 
@@ -226,18 +229,17 @@ export class FreeCourseController {
           "resourceId nameOfInstitution titleOfCourse module duration createdAt status"
         ).sort({createdAt: -1});
 
-        // Cache the result for 1 hour (3600 seconds)
-        await redis.setEx(key, 3600, JSON.stringify(models));
+        // Cache the result for 1 hour
+        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
         res.status(200).json({message: "Data found", response: models});
       } else {
-        const key = req.originalUrl;
+        const key = getUserCacheKey(CACHE_KEYS.FREE_COURSES.ALL, id);
         // Check cache first
-        const cachedData = await redis.get(key);
+        const cachedData = await getCachedData(key);
         if (cachedData) {
-          console.log("✅ Returning cached data");
           return res.json({
             message: "Data found",
-            response: JSON.parse(cachedData),
+            response: cachedData,
           });
         }
 
@@ -246,8 +248,8 @@ export class FreeCourseController {
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
-        // Cache the result for 1 hour (3600 seconds)
-        await redis.setEx(key, 3600, JSON.stringify(models));
+        // Cache the result for 1 hour
+        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
         res.status(200).json({message: "Data found", response: models});
       }
     } catch (error) {
@@ -269,9 +271,8 @@ export class FreeCourseController {
         return res.status(404).json({error: "Free Course not found"});
       }
 
-      let key = "/free-courses/";
-      redis.del(key);
-      redis.del(`${key}${req.params.id}`);
+      // Invalidate cache after permanent deletion
+      await invalidateCache('FREE_COURSES', req.params.id);
 
       res
         .status(200)
@@ -290,6 +291,9 @@ export class FreeCourseController {
         return res.status(404).json({error: "Free Course not found"});
       }
 
+      // Invalidate cache after permanent deletion
+      await invalidateCache('FREE_COURSES', req.params.id);
+
       res.status(200).json({message: "Free Course successfully deleted"});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -303,21 +307,20 @@ export class FreeCourseController {
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
   
-      const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
+      const key = CACHE_KEYS.FREE_COURSES.PUBLIC(page, limit);
   
       // Check cache first
-      const cachedData = await redis.get(key);
+      const cachedData = await getCachedData(key);
       if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json(JSON.parse(cachedData));
+        return res.json(cachedData);
       }
   
       const [models, total] = await Promise.all([
-        FreeCourseModel.find({ status: { $ne: "DELETED" } })
+        FreeCourseModel.find({ status: "ACTIVE" })
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        FreeCourseModel.countDocuments({ status: { $ne: "DELETED" } }),
+        FreeCourseModel.countDocuments({ status: "ACTIVE" }),
       ]);
   
       const result = {
@@ -331,8 +334,8 @@ export class FreeCourseController {
         },
       };
   
-      // Cache the result for 1 hour (3600 seconds)
-      await redis.setEx(key, 3600, JSON.stringify(result));
+      // Cache the result for 1 hour
+      await setCachedData(key, result, CACHE_DURATION.MEDIUM);
   
       res.status(200).json(result);
     } catch (error) {

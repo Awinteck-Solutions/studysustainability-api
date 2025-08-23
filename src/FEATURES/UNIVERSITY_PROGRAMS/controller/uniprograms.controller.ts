@@ -3,7 +3,7 @@ import UniProgramModel from "../schema/uniprograms.schema";
 import * as multer from "multer";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
-import redis from "../../../util/redis";
+import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
 // import * as sanitizeHtml from "sanitize-html";
 const sanitizeHtml = require("sanitize-html");
 
@@ -87,6 +87,9 @@ export class UniProgramsController {
       console.log("model :>> ", model);
       const newModel = new UniProgramModel(model);
       await newModel.save();
+
+      // Invalidate cache after creating new program
+      await invalidateCache('UNI_PROGRAMS');
 
       res
         .status(201)
@@ -184,9 +187,8 @@ export class UniProgramsController {
       // Save the updated model
       const updatedModel = await existingModel.save();
 
-      let key = "/university-programs/";
-      redis.del(key);
-      redis.del(`${key}${req.params.id}`);
+      // Invalidate cache after updating program
+      await invalidateCache('UNI_PROGRAMS', req.params.id);
 
       res.status(200).json({
         message: "Program updated successfully",
@@ -211,6 +213,9 @@ export class UniProgramsController {
         program.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
         let response = await program.save(); // Save the updated program
 
+        // Invalidate cache after updating image
+        await invalidateCache('UNI_PROGRAMS', req.params.id);
+
         res
           .status(201)
           .json({message: "Program image updated successfully", response});
@@ -224,12 +229,11 @@ export class UniProgramsController {
 
   static async getOne(req: Request, res: Response) {
     try {
-      const key = req.originalUrl;
+      const key = CACHE_KEYS.UNI_PROGRAMS.BY_ID(req.params.id);
       // Check cache first
-      const cachedData = await redis.get(key);
+      const cachedData = await getCachedData(key);
       if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json({message: "Data found", response: JSON.parse(cachedData)});
+        return res.json({message: "Data found", response: cachedData});
       }
 
       const model = await UniProgramModel.findById(req.params.id);
@@ -238,8 +242,8 @@ export class UniProgramsController {
         return res.status(404).json({error: "Program not found"});
       }
 
-      // Cache the result for 1 hour (3600 seconds)
-      await redis.setEx(key, 3600, JSON.stringify(model));
+      // Cache the result for 1 hour
+      await setCachedData(key, model, CACHE_DURATION.MEDIUM);
       res.status(200).json({message: "Program found", response: model});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -250,28 +254,26 @@ export class UniProgramsController {
     try {
       const {id, role} = req["currentUser"];
       if (role == Roles.ADMIN) {
-        const key = req.originalUrl;
+        const key = CACHE_KEYS.UNI_PROGRAMS.ALL;
         // Check cache first
-        const cachedData = await redis.get(key);
+        const cachedData = await getCachedData(key);
         if (cachedData) {
-          console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+          return res.json({message: "Data found", response: cachedData});
         }
 
         const models = await UniProgramModel.find({
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
-        // Cache the result for 1 hour (3600 seconds)
-        await redis.setEx(key, 3600, JSON.stringify(models));
+        // Cache the result for 1 hour
+        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
         res.status(200).json({message: "Program found", response: models});
       } else {
-        const key = req.originalUrl;
+        const key = getUserCacheKey(CACHE_KEYS.UNI_PROGRAMS.ALL, id);
         // Check cache first
-        const cachedData = await redis.get(key);
+        const cachedData = await getCachedData(key);
         if (cachedData) {
-          console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: JSON.parse(cachedData)});
+          return res.json({message: "Data found", response: cachedData});
         }
 
         const models = await UniProgramModel.find({
@@ -279,8 +281,8 @@ export class UniProgramsController {
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
-        // Cache the result for 1 hour (3600 seconds)
-        await redis.setEx(key, 3600, JSON.stringify(models));
+        // Cache the result for 1 hour
+        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
         res.status(200).json({message: "Program found", response: models});
       }
     } catch (error) {
@@ -314,9 +316,8 @@ export class UniProgramsController {
         return res.status(404).json({error: "Program not found"});
       }
 
-      let key = "/university-programs/";
-      redis.del(key);
-      redis.del(`${key}${req.params.id}`);
+      // Invalidate cache after permanent deletion
+      await invalidateCache('UNI_PROGRAMS', req.params.id);
       res.status(200).json({message: "Program successfully deleted"});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -336,6 +337,9 @@ export class UniProgramsController {
         return res.status(404).json({error: "Program not found"});
       }
 
+      // Invalidate cache after soft deletion
+      await invalidateCache('UNI_PROGRAMS', req.params.id);
+
       res
         .status(200)
         .json({message: "Program status updated to DELETED", program});
@@ -353,20 +357,19 @@ export class UniProgramsController {
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
   
-      const key = `${req.originalUrl}?page=${page}&limit=${limit}`;
+      const key = CACHE_KEYS.UNI_PROGRAMS.PUBLIC(page, limit);
         // Check cache first
-        const cachedData = await redis.get(key);
+        const cachedData = await getCachedData(key);
         if (cachedData) {
-          console.log("✅ Returning cached data");
-          return res.json(JSON.parse(cachedData));
+          return res.json(cachedData);
         }
 
         const [models, total] = await Promise.all([
-          UniProgramModel.find({ status: { $ne: "DELETED" } })
+          UniProgramModel.find({ status: "ACTIVE" })
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit),
-          UniProgramModel.countDocuments({ status: { $ne: "DELETED" } })
+          UniProgramModel.countDocuments({ status: "ACTIVE" })
         ]);
       const totalPages = Math.ceil(total / limit);
       
@@ -381,8 +384,8 @@ export class UniProgramsController {
         response: models,
       };
 
-        // Cache the result for 1 hour (3600 seconds)
-        await redis.setEx(key, 3600, JSON.stringify(responsePayload));
+        // Cache the result for 1 hour
+        await setCachedData(key, responsePayload, CACHE_DURATION.MEDIUM);
         res.status(200).json(responsePayload);
       
     } catch (error) {

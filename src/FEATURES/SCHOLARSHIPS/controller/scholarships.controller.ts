@@ -3,7 +3,7 @@ import * as multer from "multer";
 import ScholarshipsModel from "../schema/scholarships.schema";
 import mongoose from "mongoose";
 import {Roles} from "../../AUTH/enums/roles.enum";
-import redis from "../../../util/redis";
+import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
 
 interface MulterRequest extends Request {
   file: multer.File;
@@ -48,6 +48,9 @@ export class ScholarshipsController {
 
       const newScholarship = new ScholarshipsModel(scholarship);
       await newScholarship.save();
+
+      // Invalidate cache after creating new scholarship
+      await invalidateCache('SCHOLARSHIPS');
 
       res.status(201).json({
         message: "Scholarship created successfully",
@@ -109,9 +112,8 @@ export class ScholarshipsController {
       // Save the updated scholarship
       const updatedScholarship = await existingScholarship.save();
 
-      let key = "/scholarships/";
-      redis.del(key);
-      redis.del(`${key}${req.params.id}`);
+      // Invalidate cache after updating scholarship
+      await invalidateCache('SCHOLARSHIPS', req.params.id);
       res.status(200).json({
         message: "Scholarship updated successfully",
         response: updatedScholarship,
@@ -134,6 +136,10 @@ export class ScholarshipsController {
       if (req.file) {
         scholarship.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
         await scholarship.save(); // Save the updated scholarship
+        
+        // Invalidate cache after updating image
+        await invalidateCache('SCHOLARSHIPS', req.params.id);
+        
         res.status(201).json({
           message: "Scholarship image updated successfully",
           response: scholarship,
@@ -148,14 +154,14 @@ export class ScholarshipsController {
 
   static async getOne(req: Request, res: Response) {
     try {
-      const key = req.originalUrl;
+      const key = CACHE_KEYS.SCHOLARSHIPS.BY_ID(req.params.id);
       // Check cache first
-      const cachedData = await redis.get(key);
+      const cachedData = await getCachedData(key);
       if (cachedData) {
         console.log("✅ Returning cached data");
         return res.json({
           message: "Data found",
-          response: JSON.parse(cachedData),
+          response: cachedData,
         });
       }
 
@@ -165,8 +171,8 @@ export class ScholarshipsController {
         return res.status(404).json({error: "Scholarship not found"});
       }
 
-      // Cache the result for 1 hour (3600 seconds)
-      await redis.setEx(key, 3600, JSON.stringify(scholarship));
+      // Cache the result
+      await setCachedData(key, scholarship, CACHE_DURATION.MEDIUM);
       res
         .status(200)
         .json({message: "Scholarship found", response: scholarship});
@@ -179,14 +185,14 @@ export class ScholarshipsController {
     try {
       const {id, role} = req["currentUser"];
       if (role == Roles.ADMIN) {
-        const key = req.originalUrl;
+        const key = CACHE_KEYS.SCHOLARSHIPS.ALL;
         // Check cache first
-        const cachedData = await redis.get(key);
+        const cachedData = await getCachedData(key);
         if (cachedData) {
           console.log("✅ Returning cached data");
           return res.json({
             message: "Data found",
-            response: JSON.parse(cachedData),
+            response: cachedData,
           });
         }
 
@@ -194,18 +200,18 @@ export class ScholarshipsController {
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
-        // Cache the result for 1 hour (3600 seconds)
-        await redis.setEx(key, 3600, JSON.stringify(models));
+        // Cache the result
+        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
         res.status(200).json({message: "Data found", response: models});
       } else {
-        const key = req.originalUrl;
+        const key = getUserCacheKey(CACHE_KEYS.SCHOLARSHIPS.ALL, id);
         // Check cache first
-        const cachedData = await redis.get(key);
+        const cachedData = await getCachedData(key);
         if (cachedData) {
           console.log("✅ Returning cached data");
           return res.json({
             message: "Data found",
-            response: JSON.parse(cachedData),
+            response: cachedData,
           });
         }
 
@@ -214,8 +220,8 @@ export class ScholarshipsController {
           status: {$ne: "DELETED"},
         }).sort({createdAt: -1});
 
-        // Cache the result for 1 hour (3600 seconds)
-        await redis.setEx(key, 3600, JSON.stringify(models));
+        // Cache the result
+        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
         res.status(200).json({message: "Data found", response: models});
       }
     } catch (error) {
@@ -236,9 +242,8 @@ export class ScholarshipsController {
         return res.status(404).json({error: "Scholarship not found"});
       }
 
-      let key = "/scholarships/";
-      redis.del(key);
-      redis.del(`${key}${req.params.id}`);
+      // Invalidate cache after soft deletion
+      await invalidateCache('SCHOLARSHIPS', req.params.id);
       res.status(200).json({
         message: "Scholarship status updated to DELETED",
         response: scholarship,
@@ -272,23 +277,23 @@ export class ScholarshipsController {
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
   
-      const key = `${req.baseUrl}${req.path}?page=${page}&limit=${limit}`;
-  
+            const key = CACHE_KEYS.SCHOLARSHIPS.PUBLIC(page, limit);
+
       // Check cache first
-      const cachedData = await redis.get(key);
+      const cachedData = await getCachedData(key);
       if (cachedData) {
         console.log("✅ Returning cached data");
-        return res.json(JSON.parse(cachedData));
+        return res.json(cachedData);
       }
   
       const [models, total] = await Promise.all([
         ScholarshipsModel.find({
-          status: { $ne: "DELETED" },
+          status: "ACTIVE",
         })
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        ScholarshipsModel.countDocuments({ status: { $ne: "DELETED" } }),
+        ScholarshipsModel.countDocuments({ status: "ACTIVE" }),
       ]);
   
       const result = {
@@ -302,8 +307,8 @@ export class ScholarshipsController {
         },
       };
   
-      // Cache the result for 1 hour (3600 seconds)
-      await redis.setEx(key, 3600, JSON.stringify(result));
+      // Cache the result
+      await setCachedData(key, result, CACHE_DURATION.MEDIUM);
   
       res.status(200).json(result);
     } catch (error) {
