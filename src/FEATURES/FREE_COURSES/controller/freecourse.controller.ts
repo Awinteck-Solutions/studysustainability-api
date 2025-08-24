@@ -6,9 +6,9 @@ import mongoose from "mongoose";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
 
 interface MulterRequest extends Request {
-  file: multer.File;
+  file?: multer.File;
+  files?: multer.File[];
 }
-
 export class FreeCourseController {
   static async create(req: MulterRequest, res: Response) {
     try {

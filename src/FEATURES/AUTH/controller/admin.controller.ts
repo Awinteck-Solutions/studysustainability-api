@@ -21,9 +21,9 @@ import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedDa
 
 // Extend Express Request to include Multer's file property
 interface MulterRequest extends Request {
-  file: multer.File;
+  file?: multer.File;
+  files?: multer.File[];
 }
-
 export class AdminController {
   // Admin routes
 

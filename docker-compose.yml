@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # Main API application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.simple
+    container_name: study-sustainability-api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DB_URL=mongodb://mongo:27017/study_sustainability
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - mongo
+      - redis
+    volumes:
+      - ./uploads:/app/uploads
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # MongoDB service
+  mongo:
+    image: mongo:7.0
+    container_name: study-sustainability-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=study_sustainability
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # Redis service
+  redis:
+    image: redis:7.2-alpine
+    container_name: study-sustainability-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - app-network
+
+volumes:
+  mongo_data:
+  redis_data:
+
+networks:
+  app-network:
+    driver: bridge

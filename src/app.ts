@@ -28,7 +28,7 @@ app.use("/public", express.static(path.join(__dirname, "public")));
 
 app.get('/', (req: Request, res: Response) => { 
     res.json({
-        message: 'Welcome to STUDY SUSTAINABILITY HUB API'
+        message: 'Welcome to STUDY SUSTAINABILITY HUB API 2.0.1'
     })
 })
 

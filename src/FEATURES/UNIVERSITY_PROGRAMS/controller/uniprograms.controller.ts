@@ -8,9 +8,9 @@ import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedDa
 const sanitizeHtml = require("sanitize-html");
 
 interface MulterRequest extends Request {
-  file: multer.File;
+  file?: multer.File;
+  files?: multer.File[];
 }
-
 export class UniProgramsController {
   static async create(req: MulterRequest, res: Response) {
     try {
