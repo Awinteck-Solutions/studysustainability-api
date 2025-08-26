@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import mongoose from "mongoose";
 import * as multer from "multer";
 import OpenDays from "../schema/OpenDays.schema";
+import { uploadFile } from "../../../util/s3";
 
 interface MulterRequest extends Request {
   file?: multer.File;
@@ -15,7 +16,11 @@ export class OpenDaysController {
       const data = req.body;
 
       if (req.file) {
-        data.image = `${req.file.fieldname}/${req.file.filename}`;
+        // data.image = `${req.file.fieldname}/${req.file.filename}`;
+        const result = await uploadFile(req.file, "openDay");
+        if (result) {
+          data.image = `${result.Key}`;
+        }
       }
 
       const openDay = await OpenDays.create({
@@ -45,7 +50,11 @@ export class OpenDaysController {
       const data = req.body;
 
       if (req.file) {
-        data.image = `${req.file.fieldname}/${req.file.filename}`;
+        // data.image = `${req.file.fieldname}/${req.file.filename}`;
+        const result = await uploadFile(req.file, "openDay");
+        if (result) {
+          data.image = `${result.Key}`;
+        }
       }
 
       const openDay = await OpenDays.findOneAndUpdate(

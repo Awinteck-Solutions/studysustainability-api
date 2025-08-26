@@ -4,6 +4,7 @@ import {Request, Response} from "express";
 import mongoose from "mongoose";
 import * as multer from "multer";
 import DisplayAdvert from "../schema/DisplayAdvert.schema";
+import { uploadFile } from "../../../util/s3";
 
 interface MulterRequest extends Request {
   file?: multer.File;
@@ -18,8 +19,12 @@ export class DisplayAdvertsController {
 
       // If an image is uploaded, store its path
       if (req.file) {
-        data.image = `${req.file.fieldname}/${req.file.filename}`;
-        console.log("req.file.path :>> ", req.file.path);
+        // data.image = `${req.file.fieldname}/${req.file.filename}`;
+        // console.log("req.file.path :>> ", req.file.path);
+        const result = await uploadFile(req.file, "displayAdvertisement");
+        if (result) {
+          data.image = `${result.Key}`;
+        }
       }
 
       const advert = await DisplayAdvert.create({
@@ -49,8 +54,12 @@ export class DisplayAdvertsController {
       const data = req.body;
       // If an image is uploaded, store its path
       if (req.file) {
-        data.image = `${req.file.fieldname}/${req.file.filename}`;
-        console.log("req.file.path :>> ", req.file.path);
+        // data.image = `${req.file.fieldname}/${req.file.filename}`;
+        // console.log("req.file.path :>> ", req.file.path);
+        const result = await uploadFile(req.file, "displayAdvertisement");
+        if (result) {
+          data.image = `${result.Key}`;
+        }
       }
 
       const advert = await DisplayAdvert.findOneAndUpdate(

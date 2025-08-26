@@ -4,6 +4,7 @@ import FellowshipModel from "../schema/fellowship.schema";
 import mongoose from "mongoose";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
+import { uploadFile } from "../../../util/s3";
 
 interface MulterRequest extends Request {
   file?: multer.File;
@@ -46,7 +47,11 @@ export class FellowshipController {
 
       // If an image is uploaded, store its path
       if (req.file) {
-        fellowshipData.image = `${req.file.fieldname}${req.file.filename}`;
+        // fellowshipData.image = `${req.file.fieldname}${req.file.filename}`;
+        const result = await uploadFile(req.file, "fellowships");
+        if (result) {
+          fellowshipData.image = `${result.Key}`;
+        }
       }
 
       // Create a new Fellowship model and save it
@@ -111,9 +116,12 @@ export class FellowshipController {
         moreInfoLink || existingFellowship.moreInfoLink;
       existingFellowship.applyLink = applyLink || existingFellowship.applyLink;
       if (req.file) {
-        existingFellowship.image =
-          `${req.file.fieldname}${req.file.filename}` || existingFellowship.image;
-        console.log(" existingModel.image :>> ", existingFellowship.image);
+        // existingFellowship.image =
+        //   `${req.file.fieldname}${req.file.filename}` || existingFellowship.image;
+        const result = await uploadFile(req.file, "fellowships");
+        if (result) {
+          existingFellowship.image = `${result.Key}`;
+        }
       }
       // Save the updated Fellowship model
       const updatedFellowship = await existingFellowship.save();
@@ -139,7 +147,11 @@ export class FellowshipController {
 
       // If an image is uploaded, update the model with the new image path
       if (req.file) {
-        fellowship.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        // fellowship.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        const result = await uploadFile(req.file, "fellowships");
+        if (result) {
+          fellowship.image = `${result.Key}`;
+        }
         await fellowship.save(); // Save the updated model
         
         // Invalidate cache after updating image

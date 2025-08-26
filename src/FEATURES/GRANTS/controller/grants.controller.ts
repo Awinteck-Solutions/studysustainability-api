@@ -4,6 +4,7 @@ import GrantsModel from "../schema/grants.schema";
 import mongoose from "mongoose";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
+import { uploadFile } from "../../../util/s3";
 
 interface MulterRequest extends Request {
   file?: multer.File;
@@ -36,8 +37,11 @@ export class GrantsController {
 
       // If an image is uploaded, store its path
       if (req.file) {
-        grant.image = `${req.file.fieldname}${req.file.filename}`;
-        console.log("req.file.path :>> ", req.file.path);
+        // grant.image = `${req.file.fieldname}${req.file.filename}`;
+        const result = await uploadFile(req.file, "grants");
+        if (result) {
+          grant.image = `${result.Key}`;
+        }
       }
 
       console.log("req.file :>> ", req.file);
@@ -84,9 +88,12 @@ export class GrantsController {
       existingGrant.application = application || existingGrant.application;
       existingGrant.applyLink = applyLink || existingGrant.applyLink;
       if (req.file) {
-        existingGrant.image =
-          `${req.file.fieldname}${req.file.filename}` || existingGrant.image;
-        console.log(" existingModel.image :>> ", existingGrant.image);
+        // existingGrant.image =
+        //   `${req.file.fieldname}${req.file.filename}` || existingGrant.image;
+        const result = await uploadFile(req.file, "grants");
+        if (result) {
+          existingGrant.image = `${result.Key}`;
+        }
       }
       // Save the updated grant
       const updatedGrant = await existingGrant.save();
@@ -112,7 +119,11 @@ export class GrantsController {
 
       // If an image is uploaded, update the grant with the new image path
       if (req.file) {
-        grant.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        // grant.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        const result = await uploadFile(req.file, "grants");
+        if (result) {
+          grant.image = `${result.Key}`;
+        }
         await grant.save(); // Save the updated grant
         res
           .status(201)

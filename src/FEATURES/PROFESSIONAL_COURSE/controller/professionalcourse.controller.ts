@@ -4,6 +4,7 @@ import ProfessionalCourseModel from "../schema/professionalcourse.schema";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
+import { uploadFile } from "../../../util/s3";
 
 interface MulterRequest extends Request {
   file?: multer.File;
@@ -64,8 +65,11 @@ export class ProfessionalCourseController {
 
       // If an image is uploaded, store its path
       if (req.file) {
-        course.image = `${req.file.fieldname}${req.file.filename}`;
-        console.log("req.file.path :>> ", req.file.path);
+        // course.image = `${req.file.fieldname}${req.file.filename}`;
+        const result = await uploadFile(req.file, "professionals");
+        if (result) {
+          course.image = `${result.Key}`;
+        }
       }
 
       const newCourse = new ProfessionalCourseModel(course);
@@ -151,9 +155,12 @@ export class ProfessionalCourseController {
       existingCourse.applyLink = applyLink || existingCourse.applyLink;
       existingCourse.language = language || existingCourse.language;
       if (req.file) {
-        existingCourse.image =
-          `${req.file.fieldname}${req.file.filename}` || existingCourse.image;
-        console.log(" existingModel.image :>> ", existingCourse.image);
+        // existingCourse.image =
+        //   `${req.file.fieldname}${req.file.filename}` || existingCourse.image;
+        const result = await uploadFile(req.file, "professionals");
+        if (result) {
+          existingCourse.image = `${result.Key}`;
+        }
       }
       // Save the updated course
       const updatedCourse = await existingCourse.save();
@@ -182,7 +189,11 @@ export class ProfessionalCourseController {
 
       // If an image is uploaded, update the course with the new image path
       if (req.file) {
-        course.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        // course.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        const result = await uploadFile(req.file, "professionals");
+        if (result) {
+          course.image = `${result.Key}`;
+        }
         await course.save(); // Save the updated course
         
         // Invalidate cache after updating image

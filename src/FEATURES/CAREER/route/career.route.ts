@@ -14,7 +14,7 @@ const Router = express.Router();
 interface MulterRequest extends Request {
     file: multer.File;
 }
-  
+
 Router.post("/",
     authentification,
     authorization(AdminModel,[Roles.ADMIN, Roles.USER],[Permission.ALL,Permission.CAREER_CATALOGUE]),

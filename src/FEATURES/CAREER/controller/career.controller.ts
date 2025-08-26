@@ -4,6 +4,7 @@ import CareerModel from "../schema/career.schema";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
+import { uploadFile } from "../../../util/s3";
 
 interface MulterRequest extends Request {
   file?: multer.File;
@@ -33,9 +34,16 @@ export class CareerController {
       };
 
       // If an image is uploaded, store its path
+      // if (req.file) {
+      //   career.image = `${req.file.fieldname}${req.file.filename}`;
+      //   console.log("req.file.path :>> ", req.file.path);
+      // }
+
       if (req.file) {
-        career.image = `${req.file.fieldname}${req.file.filename}`;
-        console.log("req.file.path :>> ", req.file.path);
+        const result = await uploadFile(req.file, "careers");
+        if (result) {
+          career.image = `${result.Key}`;
+        }
       }
 
       // Create a new Career model and save it
@@ -109,7 +117,12 @@ export class CareerController {
 
       // If an image is uploaded, update the model with the new image path
       if (req.file) {
-        career.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        // career.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        const result = await uploadFile(req.file, "careers");
+        if (result) {
+          career.image = `${result.Key}`;
+        }
+
         await career.save(); // Save the updated model
         
         // Invalidate cache after updating image

@@ -4,6 +4,7 @@ import * as multer from "multer";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
+import { uploadFile } from "../../../util/s3";
 // import * as sanitizeHtml from "sanitize-html";
 const sanitizeHtml = require("sanitize-html");
 
@@ -77,8 +78,11 @@ export class UniProgramsController {
       };
       // If an image is uploaded, store its path
       if (req.file) {
-        model.image = `${req.file.fieldname}${req.file.filename}`;
-        console.log(" model.image :>> ", model.image);
+        // model.image = `${req.file.fieldname}${req.file.filename}`;
+        const result = await uploadFile(req.file, "uniprograms");
+        if (result) {
+          model.image = `${result.Key}`;
+        }
       }
 
       console.log("req.file :>> ", req.file);
@@ -179,9 +183,12 @@ export class UniProgramsController {
       existingModel.applyLink = applyLink || existingModel.applyLink;
       // If an image is uploaded, store its path
       if (req.file) {
-        existingModel.image =
-          `${req.file.fieldname}${req.file.filename}` || existingModel.image;
-        console.log(" existingModel.image :>> ", existingModel.image);
+        // existingModel.image =
+        //   `${req.file.fieldname}${req.file.filename}` || existingModel.image;
+        const result = await uploadFile(req.file, "uniprograms");
+        if (result) {
+          existingModel.image = `${result.Key}`;
+        }
       }
 
       // Save the updated model
@@ -210,7 +217,11 @@ export class UniProgramsController {
 
       // If an image is uploaded, update the program with the new image path
       if (req.file) {
-        program.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        // program.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        const result = await uploadFile(req.file, "uniprograms");
+        if (result) {
+          program.image = `${result.Key}`;
+        }
         let response = await program.save(); // Save the updated program
 
         // Invalidate cache after updating image

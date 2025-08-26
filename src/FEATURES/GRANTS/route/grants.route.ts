@@ -37,7 +37,7 @@ Router.patch("/:id",
 Router.patch("/image/:id",
     authentification,
     authorization(AdminModel,[Roles.ADMIN, Roles.USER],[Permission.ALL,Permission.GRANTS]),
-    upload.single("uniprograms"),
+    upload.single("grants"),
     (req: MulterRequest, res: Response) => {
         GrantsController.updateImage(req, res)
     }

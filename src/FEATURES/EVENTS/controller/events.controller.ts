@@ -4,6 +4,7 @@ import EventsModel from "../schema/events.schema";
 import mongoose from "mongoose";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
+import { uploadFile } from "../../../util/s3";
 
 interface MulterRequest extends Request {
   file?: multer.File;
@@ -66,8 +67,11 @@ export class EventsController {
 
       // If an image is uploaded, store its path
       if (req.file) {
-        eventData.image = `${req.file.fieldname}${req.file.filename}`;
-        console.log("req.file.path :>> ", req.file.path);
+        // eventData.image = `${req.file.fieldname}${req.file.filename}`;
+        const result = await uploadFile(req.file, "events");
+        if (result) {
+          eventData.image = `${result.Key}`;
+        }
       }
 
       // Create a new Event model and save it
@@ -147,9 +151,12 @@ export class EventsController {
       existingEvent.applyLink = applyLink || existingEvent.applyLink;
       existingEvent.howToApply = howToApply || existingEvent.howToApply;
       if (req.file) {
-        existingEvent.image =
-          `${req.file.fieldname}${req.file.filename}` || existingEvent.image;
-        console.log(" existingModel.image :>> ", existingEvent.image);
+        // existingEvent.image =
+        //   `${req.file.fieldname}${req.file.filename}` || existingEvent.image;
+        const result = await uploadFile(req.file, "events");
+        if (result) {
+          existingEvent.image = `${result.Key}`;
+        }
       }
 
       // Save the updated Event model
@@ -175,7 +182,11 @@ export class EventsController {
 
       // If an image is uploaded, update the model with the new image path
       if (req.file) {
-        event.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        // event.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        const result = await uploadFile(req.file, "events");
+        if (result) {
+          event.image = `${result.Key}`;
+        }
         await event.save(); // Save the updated model
         res
           .status(201)

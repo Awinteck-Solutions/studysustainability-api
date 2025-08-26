@@ -4,6 +4,7 @@ import FreeCourseModel from "../schema/freecourse.schema";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
+import { uploadFile } from "../../../util/s3";
 
 interface MulterRequest extends Request {
   file?: multer.File;
@@ -56,7 +57,11 @@ export class FreeCourseController {
 
       // If an image is uploaded, store its path
       if (req.file) {
-        freeCourseData.image = `${req.file.fieldname}${req.file.filename}`;
+        // freeCourseData.image = `${req.file.fieldname}${req.file.filename}`;
+        const result = await uploadFile(req.file, "freecourse");
+        if (result) {
+          freeCourseData.image = `${result.Key}`;
+        }
       }
 
       // Create a new FreeCourse model and save it
@@ -134,10 +139,13 @@ export class FreeCourseController {
         registerInterestForm || existingFreeCourse.registerInterestForm;
       existingFreeCourse.applyLink = applyLink || existingFreeCourse.applyLink;
       if (req.file) {
-        registerInterestForm.image =
-          `${req.file.fieldname}${req.file.filename}` ||
-          registerInterestForm.image;
-        console.log(" existingModel.image :>> ", registerInterestForm.image);
+        // existingFreeCourse.image =
+        //   `${req.file.fieldname}${req.file.filename}` ||
+        //   existingFreeCourse.image;
+        const result = await uploadFile(req.file, "freecourse");
+        if (result) {
+          existingFreeCourse.image = `${result.Key}`;
+        }
       }
       // Save the updated FreeCourse model
       const updatedFreeCourse = await existingFreeCourse.save();
@@ -164,7 +172,11 @@ export class FreeCourseController {
 
       // If an image is uploaded, update the model with the new image path
       if (req.file) {
-        freeCourse.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        // freeCourse.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        const result = await uploadFile(req.file, "freecourse");
+        if (result) {
+          freeCourse.image = `${result.Key}`;
+        }
         await freeCourse.save(); // Save the updated model
         
         // Invalidate cache after updating image

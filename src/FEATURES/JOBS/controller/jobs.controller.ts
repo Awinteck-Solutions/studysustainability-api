@@ -4,6 +4,7 @@ import JobsModel from "../schema/jobs.schema";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
+import { uploadFile } from "../../../util/s3";
 
 interface MulterRequest extends Request {
   file?: multer.File;
@@ -58,8 +59,11 @@ export class JobsController {
 
       // If an image is uploaded, store its path
       if (req.file) {
-        job.image = `${req.file.fieldname}${req.file.filename}`;
-        console.log("req.file.path :>> ", req.file.path);
+        // job.image = `${req.file.fieldname}${req.file.filename}`;
+        const result = await uploadFile(req.file, "jobs");
+        if (result) {
+          job.image = `${result.Key}`;
+        }
       }
 
       const newJob = new JobsModel(job);
@@ -129,9 +133,12 @@ export class JobsController {
       existingJob.deadline = deadline || existingJob.deadline;
       existingJob.applyLink = applyLink || existingJob.applyLink;
       if (req.file) {
-        existingJob.image =
-          `${req.file.fieldname}${req.file.filename}` || existingJob.image;
-        console.log(" existingModel.image :>> ", existingJob.image);
+        // existingJob.image =
+        //   `${req.file.fieldname}${req.file.filename}` || existingJob.image;
+        const result = await uploadFile(req.file, "jobs");
+        if (result) {
+          existingJob.image = `${result.Key}`;
+        }
       }
       // Save the updated job
       const updatedJob = await existingJob.save();
@@ -157,7 +164,11 @@ export class JobsController {
 
       // If an image is uploaded, update the job with the new image path
       if (req.file) {
-        job.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        // job.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        const result = await uploadFile(req.file, "jobs");
+        if (result) {
+          job.image = `${result.Key}`;
+        }
         await job.save(); // Save the updated job
         
         // Invalidate cache after updating image

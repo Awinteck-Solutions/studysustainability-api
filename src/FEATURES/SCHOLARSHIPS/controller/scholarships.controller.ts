@@ -4,6 +4,7 @@ import ScholarshipsModel from "../schema/scholarships.schema";
 import mongoose from "mongoose";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
+import { uploadFile } from "../../../util/s3";
 
 interface MulterRequest extends Request {
   file?: multer.File;
@@ -42,8 +43,11 @@ export class ScholarshipsController {
 
       // If an image is uploaded, store its path
       if (req.file) {
-        scholarship.image = `${req.file.fieldname}${req.file.filename}`;
-        console.log("req.file.path :>> ", req.file.path);
+        // scholarship.image = `${req.file.fieldname}${req.file.filename}`;
+        const result = await uploadFile(req.file, "scholarships");
+        if (result) {
+          scholarship.image = `${result.Key}`;
+        }
       }
 
       const newScholarship = new ScholarshipsModel(scholarship);
@@ -104,10 +108,13 @@ export class ScholarshipsController {
       existingScholarship.applyLink =
         applyLink || existingScholarship.applyLink;
       if (req.file) {
-        existingScholarship.image =
-          `${req.file.fieldname}${req.file.filename}` ||
-          existingScholarship.image;
-        console.log(" existingModel.image :>> ", existingScholarship.image);
+        // existingScholarship.image =
+        //   `${req.file.fieldname}${req.file.filename}` ||
+        //   existingScholarship.image;
+        const result = await uploadFile(req.file, "scholarships");
+        if (result) {
+          existingScholarship.image = `${result.Key}`;
+        }
       }
       // Save the updated scholarship
       const updatedScholarship = await existingScholarship.save();
@@ -134,7 +141,11 @@ export class ScholarshipsController {
 
       // If an image is uploaded, update the scholarship with the new image path
       if (req.file) {
-        scholarship.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        // scholarship.image = `${req.file.fieldname}${req.file.filename}`; // Update image field with new image path
+        const result = await uploadFile(req.file, "scholarships");
+        if (result) {
+          scholarship.image = `${result.Key}`;
+        }
         await scholarship.save(); // Save the updated scholarship
         
         // Invalidate cache after updating image

@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import mongoose from "mongoose";
 import * as multer from "multer";
 import EmailCampaign from "../schema/EmailCampaign.schema";
+import { uploadFile } from "../../../util/s3";
 
 
 interface MulterRequest extends Request {
@@ -17,7 +18,11 @@ export class EmailCampaignController {
       const data = req.body;
 
       if (req.file) {
-        data.image = `${req.file.fieldname}/${req.file.filename}`;
+        // data.image = `${req.file.fieldname}/${req.file.filename}`;
+        const result = await uploadFile(req.file, "emailCampaign");
+        if (result) {
+          data.image = `${result.Key}`;
+        }
       }
 
       const campaign = await EmailCampaign.create({
@@ -47,7 +52,11 @@ export class EmailCampaignController {
       const data = req.body;
 
       if (req.file) {
-        data.image = `${req.file.fieldname}/${req.file.filename}`;
+        // data.image = `${req.file.fieldname}/${req.file.filename}`;
+        const result = await uploadFile(req.file, "emailCampaign");
+        if (result) {
+          data.image = `${result.Key}`;
+        }
       }
 
       const campaign = await EmailCampaign.findOneAndUpdate(
