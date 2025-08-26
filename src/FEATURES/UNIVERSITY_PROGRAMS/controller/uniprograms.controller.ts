@@ -71,8 +71,8 @@ export class UniProgramsController {
         accommodationDetails: sanitizeHtml(accommodationDetails),
         accreditationDetails: sanitizeHtml(accreditationDetails),
         university,
-        openDays: openDays.split(","),
-        careerPaths: careerPaths.split(","),
+        openDays: openDays ? openDays.split(",") : [],
+        careerPaths:  careerPaths ? careerPaths.split(",") : [],
         registerInterest,
         applyLink,
       };
