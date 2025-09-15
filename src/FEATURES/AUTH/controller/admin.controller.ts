@@ -17,12 +17,10 @@ import JobsModel from "../../JOBS/schema/jobs.schema";
 import GrantsModel from "../../GRANTS/schema/grants.schema";
 import FellowshipModel from "../../FELLOWSHIP/schema/fellowship.schema";
 import EventsModel from "../../EVENTS/schema/events.schema";
-import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
-
+import redis from "../../../util/redis";
 // Extend Express Request to include Multer's file property
 interface MulterRequest extends Request {
-  file?: multer.File;
-  files?: multer.File[];
+  file: multer.File;
 }
 export class AdminController {
   // Admin routes
@@ -45,9 +43,22 @@ export class AdminController {
         role: role ?? Roles.ADMIN,
         permissions: permissions?.split(",") ?? [Permission.ALL],
       });
-      
-      const response = await admin.save();
-      
+      admin
+        .save()
+        .then((response) => {
+          return res.status(201).json({
+            message: "New admin created",
+            response,
+          });
+        })
+        .catch((error) => {
+          console.log("error :>> ", error.message);
+          return res.status(404).json({
+            message: "Unsuccessful account creation",
+            other: error.message,
+          });
+        });
+
       sendMail(
         admin.email,
         admin.firstname,
@@ -55,17 +66,8 @@ export class AdminController {
         "adminCreationHtml",
         `https://admin.studysustainabilityHub.com/admin/reset-password/${otp}`
       );
-
-      return res.status(201).json({
-        message: "New admin created",
-        response,
-      });
     } catch (error) {
-      console.log("error :>> ", error.message);
-      return res.status(404).json({
-        message: "Unsuccessful account creation",
-        other: error.message,
-      });
+      return res.status(500).json({message: "Internal server error"});
     }
   }
 
@@ -74,31 +76,33 @@ export class AdminController {
     try {
       const {id} = req.params;
 
-      const result = await AdminModel.findOneAndUpdate(
+      AdminModel.findOneAndUpdate(
         {_id: id},
         {$set: {status: "DELETED"}},
         {new: true, runValidators: true}
-      );
+      )
+        .then((result) => {
 
-      if (result) {
-        // Invalidate cache after deletion
-        await invalidateCache('ADMIN', req.params.id);
+          let key = '/admin-management/list'
+          // redis.del(key)
+          // redis.del(`${key}/list/${req.params.id}`)
 
-        return res.status(201).json({
-          status: true,
-          message: "User delete success",
+          return res.status(201).json({
+            status: true,
+            message: "User delete success",
+          });
+        })
+        .catch((error) => {
+          return res.status(404).json({
+            status: false,
+            message: "User delete failed",
+            other: error,
+          });
         });
-      } else {
-        return res.status(404).json({
-          status: false,
-          message: "User delete failed",
-        });
-      }
     } catch (error) {
-      return res.status(404).json({
-        status: false,
-        message: "User delete failed",
-        other: error,
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
       });
     }
   }
@@ -106,79 +110,85 @@ export class AdminController {
   // GET ALL USERS
   static async findAll(req: Request, res: Response) {
     try {
-      const key = CACHE_KEYS.ADMIN.ALL;
+      const key = req.originalUrl;
       // Check cache first
-      const cachedData = await getCachedData(key);
-      if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json({
-          message: "Data found",
-          response: cachedData,
-        });
-      }
+      // const cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log("✅ Returning cached data");
+      //   return res.json({
+      //     message: "Data found",
+      //     response: JSON.parse(cachedData),
+      //   });
+      // }
 
       // TOTAL RESOURCES CREATED BY USERS
-      const response = await AdminModel.find({status: {$ne: "DELETED"}});
-      console.log('AdminModel-response :>> ', response);
-      
-      const data = response.map(async (value) => {
-        const totalCareer = await CareerModel.countDocuments({
-          author: value._id,
-        });
-        const totalFreeCourse = await FreeCourseModel.countDocuments({
-          author: value._id,
-        });
-        const totalEvents = await EventsModel.countDocuments({
-          author: value._id,
-        });
-        const totalFellowship = await FellowshipModel.countDocuments({
-          author: value._id,
-        });
-        const totalGrants = await GrantsModel.countDocuments({
-          author: value._id,
-        });
-        const totalJobs = await JobsModel.countDocuments({
-          author: value._id,
-        });
-        const totalProfessional = await ProfessionalCourseModel.countDocuments({
-          author: value._id,
-        });
-        const totalScholarships = await ScholarshipsModel.countDocuments({
-          author: value._id,
-        });
-        const totalUniversity = await UniProgramModel.countDocuments({
-          author: value._id,
-        });
+      AdminModel.find({status: {$ne: "DELETED"}})
+        .then((response) => {
+          console.log('AdminModel-response :>> ', response);
+          let data = response.map(async (value) => {
+            const totalCareer = await CareerModel.countDocuments({
+              author: value._id,
+            });
+            const totalFreeCourse = await FreeCourseModel.countDocuments({
+              author: value._id,
+            });
+            const totalEvents = await EventsModel.countDocuments({
+              author: value._id,
+            });
+            const totalFellowship = await FellowshipModel.countDocuments({
+              author: value._id,
+            });
+            const totalGrants = await GrantsModel.countDocuments({
+              author: value._id,
+            });
+            const totalJobs = await JobsModel.countDocuments({
+              author: value._id,
+            });
+            const totalProfessional =
+              await ProfessionalCourseModel.countDocuments({
+                author: value._id,
+              });
+            const totalScholarships = await ScholarshipsModel.countDocuments({
+              author: value._id,
+            });
+            const totalUniversity = await UniProgramModel.countDocuments({
+              author: value._id,
+            });
 
-        return {
-          totalCareer,
-          totalGrants,
-          totalJobs,
-          totalEvents,
-          totalFellowship,
-          totalProfessional,
-          totalFreeCourse,
-          totalUniversity,
-          totalScholarships,
-          ...value._doc,
-        };
-      });
-
-      const result = await Promise.all(data);
-      
-      // Cache the result
-      await setCachedData(key, result, CACHE_DURATION.MEDIUM);
-      
-      return res.status(200).json({
-        status: true,
-        message: "Success",
-        response: result,
-      });
+            return {
+              totalCareer,
+              totalGrants,
+              totalJobs,
+              totalEvents,
+              totalFellowship,
+              totalProfessional,
+              totalFreeCourse,
+              totalUniversity,
+              totalScholarships,
+              ...value._doc,
+            };
+          });
+          Promise.all(data).then(async (result) => {
+            // Cache the result for 1 hour (3600 seconds)
+            // await redis.setEx(key, 3600, JSON.stringify(result));
+            return res.status(200).json({
+              status: true,
+              message: "Success",
+              response: result,
+            });
+          });
+        })
+        .catch((error) => {
+          return res.status(404).json({
+            status: false,
+            message: "failed",
+            other: error,
+          });
+        });
     } catch (error) {
-      return res.status(404).json({
-        status: false,
-        message: "failed",
-        other: error,
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
       });
     }
   }
@@ -188,57 +198,50 @@ export class AdminController {
     try {
       let { id } = req.params;
       
-      const key = CACHE_KEYS.ADMIN.BY_ID(req.params.id);
+      const key = req.originalUrl;
       // Check cache first
-      const cachedData = await getCachedData(key);
-      if (cachedData) {
-        console.log("✅ Returning cached data");
-        return res.json({
-          message: "Data found",
-          response: cachedData,
-        });
-      }
+      // const cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log("✅ Returning cached data");
+      //   return res.json({
+      //     message: "Data found",
+      //     response: JSON.parse(cachedData),
+      //   });
+      // }
 
-      const response = await AdminModel.findOne({_id: id});
-      
-      if (response) {
-        // Cache the result
-        await setCachedData(key, response, CACHE_DURATION.MEDIUM);
-        
-        return res.status(201).json({
-          status: true,
-          message: "User success",
-          response,
+      AdminModel.findOne({_id: id})
+        .then(async (response) => {
+           // Cache the result for 1 hour (3600 seconds)
+          // await redis.setEx(key, 3600, JSON.stringify(response));
+          
+          return res.status(201).json({
+            status: true,
+            message: "User success",
+            response,
+          });
+        })
+        .catch((error) => {
+          return res.status(404).json({
+            status: false,
+            message: "User failed",
+            other: error,
+          });
         });
-      } else {
-        return res.status(404).json({
-          status: false,
-          message: "User not found",
-        });
-      }
     } catch (error) {
-      return res.status(404).json({
-        status: false,
-        message: "User failed",
-        other: error,
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
       });
     }
   }
 
-  // UPDATE USER
+  // GET ALL USERS
   static async update(req: Request, res: Response) {
     try {
       let {id} = req.params;
       console.log("id :>> ", id);
       let {status, firstname, lastname, email, role, permissions} = req.body;
       let model = await AdminModel.findOne({_id: id});
-
-      if (!model) {
-        return res.status(404).json({
-          status: false,
-          message: "User not found",
-        });
-      }
 
       model.firstname = firstname || model.firstname;
       model.lastname = lastname || model.lastname;
@@ -249,8 +252,9 @@ export class AdminController {
 
       const response = await model.save();
 
-      // Invalidate cache after update
-      await invalidateCache('ADMIN', req.params.id);
+      let key = '/admin-management/list'
+      // redis.del(key)
+      // redis.del(`${key}/list/${req.params.id}`)
 
       return res.status(201).json({
         status: true,

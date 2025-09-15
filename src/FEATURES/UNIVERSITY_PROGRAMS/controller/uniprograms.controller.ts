@@ -513,7 +513,8 @@ export class UniProgramsController {
     }
   }
 
-  // Get unique institution names
+  // Get unique institution names from both nameOfInstitution field and university references
+  // Returns institutions with their ID (for university references) and organization name
   static async getUniqueInstitutions(req: Request, res: Response) {
     try {
       const key = 'uniprograms_unique_institutions';
@@ -524,8 +525,8 @@ export class UniProgramsController {
         return res.json({ message: "Unique institutions found", response: cachedData });
       }
 
-      // Get unique institution names from active programs
-      const institutions = await UniProgramModel.aggregate([
+      // Get unique institution names from nameOfInstitution field
+      const nameInstitutions = await UniProgramModel.aggregate([
         {
           $match: {
             status: "ACTIVE",
@@ -540,15 +541,79 @@ export class UniProgramsController {
         {
           $project: {
             _id: 0,
-            name: "$_id"
+            name: "$_id",
+            type: "nameOfInstitution"
           }
         }
       ]);
-      
-      const institutionNames = institutions.map(inst => inst.name);
 
-      // Sort institutions alphabetically
-      const sortedInstitutions = institutionNames.sort();
+      // Get unique universities from university field (referenced universities)
+      const universityInstitutions = await UniProgramModel.aggregate([
+        {
+          $match: {
+            status: "ACTIVE",
+            university: { $exists: true, $ne: null }
+          }
+        },
+        {
+          $lookup: {
+            from: "admins", // Assuming universities are stored as admin users
+            localField: "university",
+            foreignField: "_id",
+            as: "universityData"
+          }
+        },
+        {
+          $unwind: {
+            path: "$universityData",
+            preserveNullAndEmptyArrays: true
+          }
+        },
+        {
+          $match: {
+            "universityData.organisationName": { $exists: true, $nin: [null, ""] }
+          }
+        },
+        {
+          $group: {
+            _id: "$university",
+            organisationName: { $first: "$universityData.organisationName" }
+          }
+        },
+        {
+          $project: {
+            _id: 1,
+            name: "$organisationName",
+            type: "university"
+          }
+        }
+      ]);
+
+      // Combine both types of institutions
+      const allInstitutions = [
+        ...nameInstitutions.map(inst => ({
+          id: null,
+          name: inst.name,
+          type: inst.type
+        })),
+        ...universityInstitutions.map(inst => ({
+          id: inst._id,
+          name: inst.name,
+          type: inst.type
+        }))
+      ];
+
+      // Remove duplicates based on name (case-insensitive)
+      const uniqueInstitutions = allInstitutions.filter((institution, index, self) => 
+        index === self.findIndex(i => 
+          i.name.toLowerCase() === institution.name.toLowerCase()
+        )
+      );
+
+      // Sort institutions alphabetically by name
+      const sortedInstitutions = uniqueInstitutions.sort((a, b) => 
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+      );
 
       // Cache the result for 2 hours (institutions don't change frequently)
       await setCachedData(key, sortedInstitutions, CACHE_DURATION.LONG);
@@ -556,7 +621,12 @@ export class UniProgramsController {
       res.status(200).json({ 
         message: "Unique institutions found", 
         response: sortedInstitutions,
-        count: sortedInstitutions.length
+        count: sortedInstitutions.length,
+        breakdown: {
+          nameOfInstitution: nameInstitutions.length,
+          university: universityInstitutions.length,
+          total: sortedInstitutions.length
+        }
       });
     } catch (error) {
       console.log('error :>> ', error);

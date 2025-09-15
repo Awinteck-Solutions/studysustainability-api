@@ -5,9 +5,9 @@ import UserModel from "../schema/user.schema";
 
 // Extend Express Request to include Multer's file property
 interface MulterRequest extends Request {
-  file?: multer.File;
-  files?: multer.File[];
-}export class UserController {
+  file: multer.File;
+}
+export class UserController {
   // Admin routes
 
  

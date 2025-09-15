@@ -4,6 +4,8 @@ export class AdminDto {
   @Expose() token;
   @Expose() firstname;
   @Expose() lastname;
+  @Expose() image;
+  @Expose() organisationName;
   @Expose() email;
   @Expose() role;
   @Expose() permissions;

@@ -21,11 +21,18 @@ Router.post("/admin/signup",
     }
 );
 
+Router.post("/admin/profile/:id",
+    (req: Request, res: Response) => { 
+        AuthController.addProfile(req, res)
+    }
+);
+
 Router.post("/admin/login",
     (req: Request, res: Response) => { 
         AuthController.login(req, res)
     }
 );
+
 
 
 Router.get("/admin",
