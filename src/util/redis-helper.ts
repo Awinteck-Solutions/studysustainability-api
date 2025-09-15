@@ -70,6 +70,12 @@ export const CACHE_KEYS = {
   ADMIN: {
     ALL: '/admin-management/list',
     BY_ID: (id: string) => `/admin-management/list/${id}`
+  },
+  
+  // Subscribers
+  SUBSCRIBERS: {
+    ALL: '/subscribers/',
+    BY_ID: (id: string) => `/subscribers/${id}`
   }
 };
 

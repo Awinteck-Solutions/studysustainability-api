@@ -27,7 +27,7 @@ export class GrantsController {
       let grant: any = {
         author: id,
         titleOfGrant,
-        deadline,
+        deadline: deadline && deadline !== "null" ? new Date(deadline) : null,
         summary,
         benefits,
         eligibility,
@@ -81,7 +81,7 @@ export class GrantsController {
 
       // Update the grant with new data
       existingGrant.titleOfGrant = titleOfGrant || existingGrant.titleOfGrant;
-      existingGrant.deadline = deadline || existingGrant.deadline;
+      existingGrant.deadline = deadline && deadline !== "null" ? new Date(deadline) : existingGrant.deadline;
       existingGrant.summary = summary || existingGrant.summary;
       existingGrant.benefits = benefits || existingGrant.benefits;
       existingGrant.eligibility = eligibility || existingGrant.eligibility;

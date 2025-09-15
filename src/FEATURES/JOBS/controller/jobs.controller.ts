@@ -53,7 +53,7 @@ export class JobsController {
         overviewOfRole,
         jobDescription,
         idealPersonSpecifications,
-        deadline,
+        deadline: deadline && deadline !== "null" ? new Date(deadline) : null,
         applyLink,
       };
 
@@ -130,7 +130,7 @@ export class JobsController {
       existingJob.jobDescription = jobDescription || existingJob.jobDescription;
       existingJob.idealPersonSpecifications =
         idealPersonSpecifications || existingJob.idealPersonSpecifications;
-      existingJob.deadline = deadline || existingJob.deadline;
+      existingJob.deadline = deadline && deadline !== "null" ? new Date(deadline) : existingJob.deadline;
       existingJob.applyLink = applyLink || existingJob.applyLink;
       if (req.file) {
         // existingJob.image =

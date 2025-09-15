@@ -33,7 +33,7 @@ export class FellowshipController {
         author: id,
         nameOfProvider,
         titleOfFellowship,
-        deadline,
+        deadline: deadline && deadline !== "null" ? new Date(deadline) : null,
         date,
         eventType,
         duration,
@@ -105,7 +105,7 @@ export class FellowshipController {
       eventType || existingFellowship.eventType;
       existingFellowship.duration =
       duration || existingFellowship.duration;
-      existingFellowship.deadline = deadline || existingFellowship.deadline;
+      existingFellowship.deadline = deadline && deadline !== "null" ? new Date(deadline) : existingFellowship.deadline;
       existingFellowship.summary = summary || existingFellowship.summary;
       existingFellowship.benefits = benefits || existingFellowship.benefits;
       existingFellowship.eligibility =

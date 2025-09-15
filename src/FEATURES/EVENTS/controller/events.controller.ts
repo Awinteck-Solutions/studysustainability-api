@@ -54,7 +54,7 @@ export class EventsController {
         paymentOptions,
         deliveryFormat,
         registrationLink,
-        deadline,
+        deadline: deadline && deadline !== "null" ? new Date(deadline) : null,
         summary,
         benefits,
         eligibility,
@@ -85,6 +85,7 @@ export class EventsController {
         .status(201)
         .json({message: "Event created successfully", response: newEvent});
     } catch (error) {
+      console.log('error', error)
       res.status(400).json({error: error.message});
     }
   }
@@ -141,7 +142,7 @@ export class EventsController {
         deliveryFormat || existingEvent.deliveryFormat;
       existingEvent.registrationLink =
         registrationLink || existingEvent.registrationLink;
-      existingEvent.deadline = deadline || existingEvent.deadline;
+      existingEvent.deadline = deadline && deadline !== "null" ? new Date(deadline) : existingEvent.deadline;
       existingEvent.summary = summary || existingEvent.summary;
       existingEvent.benefits = benefits || existingEvent.benefits;
       existingEvent.eligibility = eligibility || existingEvent.eligibility;

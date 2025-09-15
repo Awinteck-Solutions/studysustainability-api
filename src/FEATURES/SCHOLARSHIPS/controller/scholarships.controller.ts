@@ -32,7 +32,7 @@ export class ScholarshipsController {
         titleOfScholarship,
         scholarshipType,
         nameOfProvider,
-        deadline,
+        deadline: deadline && deadline !== "null" ? new Date(deadline) : null,
         summary,
         benefits,
         eligibility,
@@ -96,7 +96,7 @@ export class ScholarshipsController {
         nameOfProvider || existingScholarship.nameOfProvider;
       existingScholarship.scholarshipType =
         scholarshipType || existingScholarship.scholarshipType;
-      existingScholarship.deadline = deadline || existingScholarship.deadline;
+      existingScholarship.deadline = deadline && deadline !== "null" ? new Date(deadline) : existingScholarship.deadline;
       existingScholarship.summary = summary || existingScholarship.summary;
       existingScholarship.benefits = benefits || existingScholarship.benefits;
       existingScholarship.eligibility =

@@ -9,4 +9,5 @@ export enum Permission {
   JOBS = "JOBS",
   CAREER_CATALOGUE = "CAREER_CATALOGUE",
   EVENTS = "EVENTS",
+  SUBSCRIBERS = "SUBSCRIBERS",
 }

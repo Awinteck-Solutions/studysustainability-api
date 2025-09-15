@@ -38,7 +38,7 @@ const EventsSchema = new mongoose.Schema(
     paymentOptions: { type: String }, // Describe options like "Full, Installment"
     deliveryFormat: {type: String},
     registrationLink: { type: String }, // URL for registration
-    deadline: { type: Date }, // Application deadline for competitions, conferences, training
+    deadline: { type: Date, required: false, default: null }, // Application deadline for competitions, conferences, training
     summary: { type: String }, // Summary of the event
     benefits: { type: String }, // List of benefits for attendees
     eligibility: { type: String }, // Who is eligible to attend

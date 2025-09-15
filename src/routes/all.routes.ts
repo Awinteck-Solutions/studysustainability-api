@@ -23,6 +23,7 @@ import interestFormRoutes from '../FEATURES/INTERESTFORM/route/InterestForm.rout
 import engagementRoutes from '../FEATURES/Engagement/route/Engagement.route';
 import emailCampaignRoutes from '../FEATURES/EmailCampaign/route/EmailCampaign.route';
 import displayAdvertRoutes from '../FEATURES/DisplayAdvert/route/DisplayAdvert.route';
+import subscriberRoutes from '../FEATURES/SUBSCRIBER/route/subscriber.route';
 const Router = express.Router();
 
 Router.use("/auth", authRoutes);
@@ -53,6 +54,7 @@ Router.use("/interest-form", interestFormRoutes);
 Router.use("/engagement", engagementRoutes);
 Router.use("/email-campaign", emailCampaignRoutes);
 Router.use("/display-advert", displayAdvertRoutes);
+Router.use("/subscribers", subscriberRoutes);
 
 
 export { Router }
