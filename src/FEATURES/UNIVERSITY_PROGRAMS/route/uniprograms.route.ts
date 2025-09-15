@@ -60,6 +60,12 @@ Router.get("/public", (req: Request, res: Response) => {
 }
 );
 
+// Get unique institutions (public endpoint)
+Router.get("/institutions", (req: Request, res: Response) => {
+    UniProgramsController.getUniqueInstitutions(req, res)
+}
+);
+
 
 
 Router.get("/uni/:id",

@@ -5,6 +5,8 @@ import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
 import { uploadFile } from "../../../util/s3";
+import redis from "../../../util/redis";
+import { qualificationType } from "../enums/qualificationTypes.enums";
 // import * as sanitizeHtml from "sanitize-html";
 const sanitizeHtml = require("sanitize-html");
 
@@ -12,6 +14,26 @@ interface MulterRequest extends Request {
   file?: multer.File;
   files?: multer.File[];
 }
+
+// Helper function to invalidate public cache patterns
+const invalidatePublicCache = async () => {
+  try {
+    // Get all keys that match the public cache pattern
+    const keys = await redis.keys('uniprograms_public_*');
+    if (keys.length > 0) {
+      // Delete keys one by one to avoid type issues
+      for (const key of keys) {
+        await redis.del(key);
+      }
+    }
+    
+    // Also invalidate unique institutions cache
+    await redis.del('uniprograms_unique_institutions');
+  } catch (error) {
+    console.error('Error invalidating public cache:', error);
+  }
+};
+
 export class UniProgramsController {
   static async create(req: MulterRequest, res: Response) {
     try {
@@ -94,6 +116,8 @@ export class UniProgramsController {
 
       // Invalidate cache after creating new program
       await invalidateCache('UNI_PROGRAMS');
+      // Also invalidate public cache patterns
+      await invalidatePublicCache();
 
       res
         .status(201)
@@ -196,6 +220,8 @@ export class UniProgramsController {
 
       // Invalidate cache after updating program
       await invalidateCache('UNI_PROGRAMS', req.params.id);
+      // Also invalidate public cache patterns
+      await invalidatePublicCache();
 
       res.status(200).json({
         message: "Program updated successfully",
@@ -226,6 +252,8 @@ export class UniProgramsController {
 
         // Invalidate cache after updating image
         await invalidateCache('UNI_PROGRAMS', req.params.id);
+        // Also invalidate public cache patterns
+        await invalidatePublicCache();
 
         res
           .status(201)
@@ -329,6 +357,8 @@ export class UniProgramsController {
 
       // Invalidate cache after permanent deletion
       await invalidateCache('UNI_PROGRAMS', req.params.id);
+      // Also invalidate public cache patterns
+      await invalidatePublicCache();
       res.status(200).json({message: "Program successfully deleted"});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -350,6 +380,8 @@ export class UniProgramsController {
 
       // Invalidate cache after soft deletion
       await invalidateCache('UNI_PROGRAMS', req.params.id);
+      // Also invalidate public cache patterns
+      await invalidatePublicCache();
 
       res
         .status(200)
@@ -360,28 +392,94 @@ export class UniProgramsController {
   }
 
 
-  // Public
+  // Public endpoint with search and filtering capabilities
+  // Query parameters:
+  // - search: General search across university name, program title, discipline, qualification, and location
+  // - discipline: Filter by specific discipline
+  // - studyType: Filter by study type (Full-Time, Part-Time, etc.)
+  // - qualification: Filter by qualification type
+  // - institution: Filter by institution name
+  // - location: Filter by location
+  // - startTerm: Filter by start term
+  // - delivery: Filter by delivery method (Online, On-campus, Hybrid)
+  // - page: Page number for pagination (default: 1)
+  // - limit: Number of items per page (default: 10)
   static async getAllPublic(req: Request, res: Response) {
     try {
-    
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
-  
-      const key = CACHE_KEYS.UNI_PROGRAMS.PUBLIC(page, limit);
-        // Check cache first
-        const cachedData = await getCachedData(key);
-        if (cachedData) {
-          return res.json(cachedData);
-        }
+      
+      // Extract search and filter parameters
+      const search = req.query.search as string;
+      const discipline = req.query.discipline as string;
+      const studyType = req.query.studyType as string;
+      const qualificationType = req.query.qualificationType as string;
+      const institution = req.query.institution as string;
+      const location = req.query.location as string;
+      const startTerm = req.query.startTerm as string;
+      const delivery = req.query.delivery as string;
 
-        const [models, total] = await Promise.all([
-          UniProgramModel.find({ status: "ACTIVE" })
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limit),
-          UniProgramModel.countDocuments({ status: "ACTIVE" })
-        ]);
+      // Build the base query
+      let query: any = { status: "ACTIVE" };
+
+      // Add search functionality (searches across university name, program title, and discipline)
+      if (search) {
+        query.$or = [
+          { nameOfInstitution: { $regex: search, $options: 'i' } },
+          { titleOfProgramme: { $regex: search, $options: 'i' } },
+          { discipline: { $regex: search, $options: 'i' } },
+          { qualificationType: { $regex: search, $options: 'i' } },
+          { location: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      // Add filter parameters
+      if (discipline) {
+        query.discipline = { $regex: discipline, $options: 'i' };
+      }
+
+      if (studyType) {
+        query.studyType = { $regex: studyType, $options: 'i' };
+      }
+
+      if (qualificationType) {
+        query.qualificationType = { $regex: qualificationType, $options: 'i' };
+      }
+
+      if (institution) {
+        query.nameOfInstitution = { $regex: institution, $options: 'i' };
+      }
+
+      if (location) {
+        query.location = { $regex: location, $options: 'i' };
+      }
+
+      if (startTerm) {
+        query.startTerm = { $regex: startTerm, $options: 'i' };
+      }
+
+      if (delivery) {
+        query.delivery = { $regex: delivery, $options: 'i' };
+      }
+
+      // Create cache key that includes search and filter parameters
+      const cacheKey = `uniprograms_public_${page}_${limit}_${search || ''}_${discipline || ''}_${studyType || ''}_${qualificationType || ''}_${institution || ''}_${location || ''}_${startTerm || ''}_${delivery || ''}`;
+      
+      // Check cache first
+      const cachedData = await getCachedData(cacheKey);
+      if (cachedData) {
+        return res.json(cachedData);
+      }
+
+      const [models, total] = await Promise.all([
+        UniProgramModel.find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit),
+        UniProgramModel.countDocuments(query)
+      ]);
+      
       const totalPages = Math.ceil(total / limit);
       
       const responsePayload = {
@@ -391,17 +489,78 @@ export class UniProgramsController {
           page,
           limit,
           totalPages,
+          filters: {
+            search: search || null,
+            discipline: discipline || null,
+            studyType: studyType || null,
+            qualificationType: qualificationType || null,
+            institution: institution || null,
+            location: location || null,
+            startTerm: startTerm || null,
+            delivery: delivery || null,
+          }
         },
         response: models,
       };
 
-        // Cache the result for 1 hour
-        await setCachedData(key, responsePayload, CACHE_DURATION.MEDIUM);
-        res.status(200).json(responsePayload);
+      // Cache the result for 1 hour
+      await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+      res.status(200).json(responsePayload);
       
     } catch (error) {
       console.log('error :>> ', error);
       res.status(400).json({error: error.message});
+    }
+  }
+
+  // Get unique institution names
+  static async getUniqueInstitutions(req: Request, res: Response) {
+    try {
+      const key = 'uniprograms_unique_institutions';
+      
+      // Check cache first
+      const cachedData = await getCachedData(key);
+      if (cachedData) {
+        return res.json({ message: "Unique institutions found", response: cachedData });
+      }
+
+      // Get unique institution names from active programs
+      const institutions = await UniProgramModel.aggregate([
+        {
+          $match: {
+            status: "ACTIVE",
+            nameOfInstitution: { $exists: true, $nin: [null, ""] }
+          }
+        },
+        {
+          $group: {
+            _id: "$nameOfInstitution"
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            name: "$_id"
+          }
+        }
+      ]);
+      
+      const institutionNames = institutions.map(inst => inst.name);
+
+      // Sort institutions alphabetically
+      const sortedInstitutions = institutionNames.sort();
+
+      // Cache the result for 2 hours (institutions don't change frequently)
+      await setCachedData(key, sortedInstitutions, CACHE_DURATION.LONG);
+
+      res.status(200).json({ 
+        message: "Unique institutions found", 
+        response: sortedInstitutions,
+        count: sortedInstitutions.length
+      });
+    } catch (error) {
+      console.log('error :>> ', error);
+      res.status(400).json({ error: error.message });
     }
   }
 }
