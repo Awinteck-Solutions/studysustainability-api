@@ -318,41 +318,121 @@ export class FreeCourseController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
-  
-      const key = CACHE_KEYS.FREE_COURSES.PUBLIC(page, limit);
-  
+      
+      // Extract search and filter parameters
+      const search = req.query.search as string;
+      const nameOfInstitution = req.query.nameOfInstitution as string;
+      const discipline = req.query.discipline as string;
+      const language = req.query.language as string;
+      const delivery = req.query.delivery as string;
+      const location = req.query.location as string;
+      const certificate = req.query.certificate as string;
+      const assessment = req.query.assessment as string;
+      const includeExpired = req.query.includeExpired as string;
+
+      // Build the base query
+      let query: any = { status: "ACTIVE" };
+
+      // Add search functionality (searches across course title, institution, and content)
+      if (search) {
+        query.$or = [
+          { titleOfCourse: { $regex: search, $options: 'i' } },
+          { nameOfInstitution: { $regex: search, $options: 'i' } },
+          { aboutCourse: { $regex: search, $options: 'i' } },
+          { courseContent: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      // Add filter parameters
+      if (nameOfInstitution) {
+        query.nameOfInstitution = { $regex: nameOfInstitution, $options: 'i' };
+      }
+
+      if (discipline) {
+        query.discipline = { $regex: discipline, $options: 'i' };
+      }
+
+      if (language) {
+        query.language = { $regex: language, $options: 'i' };
+      }
+
+      if (delivery) {
+        query.delivery = { $regex: delivery, $options: 'i' };
+      }
+
+      if (location) {
+        query.location = { $regex: location, $options: 'i' };
+      }
+
+      if (certificate) {
+        query.certificate = certificate === 'true';
+      }
+
+      if (assessment) {
+        query.assessment = assessment === 'true';
+      }
+
+      // Filter out expired start dates unless explicitly requested
+      if (includeExpired !== 'true') {
+        query.$and = [
+          {
+            $or: [
+              { nextStartDate: { $exists: false } },
+              { nextStartDate: null },
+              { nextStartDate: { $gte: new Date() } }
+            ]
+          }
+        ];
+      }
+
+      // Create cache key that includes search and filter parameters
+      const cacheKey = `freecourses_public_${page}_${limit}_${search || ''}_${nameOfInstitution || ''}_${discipline || ''}_${language || ''}_${delivery || ''}_${location || ''}_${certificate || ''}_${assessment || ''}_${includeExpired || ''}`;
+      
       // Check cache first
-      const cachedData = await getCachedData(key);
+      const cachedData = await getCachedData(cacheKey);
       if (cachedData) {
         return res.json(cachedData);
       }
-  
+
       const [models, total] = await Promise.all([
-        FreeCourseModel.find({ status: "ACTIVE" })
+        FreeCourseModel.find(query)
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        FreeCourseModel.countDocuments({ status: "ACTIVE" }),
+        FreeCourseModel.countDocuments(query)
       ]);
-  
-      const result = {
+      
+      const totalPages = Math.ceil(total / limit);
+      
+      const responsePayload = {
         message: "Data found",
-        response: models,
-        pagination: {
+        metadata: {
           total,
           page,
           limit,
-          totalPages: Math.ceil(total / limit),
+          totalPages,
+          filters: {
+            search: search || null,
+            nameOfInstitution: nameOfInstitution || null,
+            discipline: discipline || null,
+            language: language || null,
+            delivery: delivery || null,
+            location: location || null,
+            certificate: certificate || null,
+            assessment: assessment || null,
+            includeExpired: includeExpired === 'true' || null,
+          }
         },
+        response: models,
       };
-  
+
       // Cache the result for 1 hour
-      await setCachedData(key, result, CACHE_DURATION.MEDIUM);
-  
-      res.status(200).json(result);
+      await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+      res.status(200).json(responsePayload);
+      
     } catch (error) {
-      console.log("error :>> ", error);
-      res.status(400).json({ error: error.message });
+      console.log('error :>> ', error);
+      res.status(400).json({error: error.message});
     }
   }
   

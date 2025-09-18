@@ -331,43 +331,127 @@ export class ProfessionalCourseController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
-  
-            const key = CACHE_KEYS.PROFESSIONAL_COURSES.PUBLIC(page, limit);
+      
+      // Extract search and filter parameters
+      const search = req.query.search as string;
+      const nameOfProvider = req.query.nameOfProvider as string;
+      const nameOfCourse = req.query.nameOfCourse as string;
+      const disciplineCategory = req.query.disciplineCategory as string;
+      const industry = req.query.industry as string;
+      const location = req.query.location as string;
+      const deliveryType = req.query.deliveryType as string;
+      const language = req.query.language as string;
+      const paymentType = req.query.paymentType as string;
+      const includeExpired = req.query.includeExpired as string;
 
+      // Build the base query
+      let query: any = { status: "ACTIVE" };
+
+      // Add search functionality (searches across course name, provider, and content)
+      if (search) {
+        query.$or = [
+          { nameOfCourse: { $regex: search, $options: 'i' } },
+          { nameOfProvider: { $regex: search, $options: 'i' } },
+          { aboutCourse: { $regex: search, $options: 'i' } },
+          { courseContent: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      // Add filter parameters
+      if (nameOfProvider) {
+        query.nameOfProvider = { $regex: nameOfProvider, $options: 'i' };
+      }
+
+      if (nameOfCourse) {
+        query.nameOfCourse = { $regex: nameOfCourse, $options: 'i' };
+      }
+
+      if (disciplineCategory) {
+        query.disciplineCategory = { $regex: disciplineCategory, $options: 'i' };
+      }
+
+      if (industry) {
+        query.industry = { $regex: industry, $options: 'i' };
+      }
+
+      if (location) {
+        query.location = { $regex: location, $options: 'i' };
+      }
+
+      if (deliveryType) {
+        query.deliveryType = { $regex: deliveryType, $options: 'i' };
+      }
+
+      if (language) {
+        query.language = { $regex: language, $options: 'i' };
+      }
+
+      if (paymentType) {
+        query.paymentType = { $regex: paymentType, $options: 'i' };
+      }
+
+      // Filter out expired start dates unless explicitly requested
+      if (includeExpired !== 'true') {
+        query.$and = [
+          {
+            $or: [
+              { nextStartDate: { $exists: false } },
+              { nextStartDate: null },
+              { nextStartDate: { $gte: new Date() } }
+            ]
+          }
+        ];
+      }
+
+      // Create cache key that includes search and filter parameters
+      const cacheKey = `professionalcourses_public_${page}_${limit}_${search || ''}_${nameOfProvider || ''}_${nameOfCourse || ''}_${disciplineCategory || ''}_${industry || ''}_${location || ''}_${deliveryType || ''}_${language || ''}_${paymentType || ''}_${includeExpired || ''}`;
+      
       // Check cache first
-      const cachedData = await getCachedData(key);
+      const cachedData = await getCachedData(cacheKey);
       if (cachedData) {
-        console.log("✅ Returning cached data");
         return res.json(cachedData);
       }
-  
+
       const [models, total] = await Promise.all([
-        ProfessionalCourseModel.find({
-          status: "ACTIVE",
-        })
+        ProfessionalCourseModel.find(query)
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        ProfessionalCourseModel.countDocuments({ status: "ACTIVE" }),
+        ProfessionalCourseModel.countDocuments(query)
       ]);
-  
-      const result = {
+      
+      const totalPages = Math.ceil(total / limit);
+      
+      const responsePayload = {
         message: "Data found",
-        response: models,
-        pagination: {
+        metadata: {
           total,
           page,
           limit,
-          totalPages: Math.ceil(total / limit),
+          totalPages,
+          filters: {
+            search: search || null,
+            nameOfProvider: nameOfProvider || null,
+            nameOfCourse: nameOfCourse || null,
+            disciplineCategory: disciplineCategory || null,
+            industry: industry || null,
+            location: location || null,
+            deliveryType: deliveryType || null,
+            language: language || null,
+            paymentType: paymentType || null,
+            includeExpired: includeExpired === 'true' || null,
+          }
         },
+        response: models,
       };
-  
-      // Cache the result
-      await setCachedData(key, result, CACHE_DURATION.MEDIUM);
-  
-      res.status(200).json(result);
+
+      // Cache the result for 1 hour
+      await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+      res.status(200).json(responsePayload);
+      
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      console.log('error :>> ', error);
+      res.status(400).json({error: error.message});
     }
   }
   

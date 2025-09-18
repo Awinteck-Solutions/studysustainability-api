@@ -76,6 +76,13 @@ export const CACHE_KEYS = {
   SUBSCRIBERS: {
     ALL: '/subscribers/',
     BY_ID: (id: string) => `/subscribers/${id}`
+  },
+  
+  // Advertise
+  ADVERTISE: {
+    ALL: '/advertise/',
+    BY_ID: (id: string) => `/advertise/${id}`,
+    PUBLIC: (page: number, limit: number) => `/advertise/public?page=${page}&limit=${limit}`
   }
 };
 

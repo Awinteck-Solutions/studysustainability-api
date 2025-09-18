@@ -19,7 +19,7 @@ const EventsSchema = new mongoose.Schema(
   },
       organiser: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "organiser", // Reference to University model
+            ref: "admin", // Reference to University model
             required: false, // Optional field
     },
       

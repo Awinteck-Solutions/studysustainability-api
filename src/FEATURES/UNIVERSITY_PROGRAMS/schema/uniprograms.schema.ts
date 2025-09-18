@@ -26,7 +26,7 @@ const UniProgramSchema = new Schema({
     },
     university: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "university", // Reference to University model
+        ref: "admin", // Reference to University model
         required: false, // Optional field
     },
     programId: {

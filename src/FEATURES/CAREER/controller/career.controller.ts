@@ -257,39 +257,76 @@ export class CareerController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
-      const key = CACHE_KEYS.CAREERS.PUBLIC(page, limit);
-  
+      
+      // Extract search and filter parameters
+      const search = req.query.search as string;
+      const industry = req.query.industry as string;
+      const roleLevel = req.query.roleLevel as string;
+
+      // Build the base query
+      let query: any = { status: "ACTIVE" };
+
+      // Add search functionality (searches across position title, overview, and responsibilities)
+      if (search) {
+        query.$or = [
+          { titleOfPosition: { $regex: search, $options: 'i' } },
+          { positionOverview: { $regex: search, $options: 'i' } },
+          { rolesAndResponsibilities: { $regex: search, $options: 'i' } },
+          { idealPersonSpecifications: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      // Add filter parameters
+      if (industry) {
+        query.industry = { $regex: industry, $options: 'i' };
+      }
+
+      if (roleLevel) {
+        query.roleLevel = { $regex: roleLevel, $options: 'i' };
+      }
+
+      // Create cache key that includes search and filter parameters
+      const cacheKey = `careers_public_${page}_${limit}_${search || ''}_${industry || ''}_${roleLevel || ''}`;
+      
       // Check cache first
-      const cachedData = await getCachedData(key);
+      const cachedData = await getCachedData(cacheKey);
       if (cachedData) {
         return res.json(cachedData);
       }
-  
+
       const [models, total] = await Promise.all([
-        CareerModel.find({ status: "ACTIVE" })
+        CareerModel.find(query)
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        CareerModel.countDocuments({ status: "ACTIVE" }),
+        CareerModel.countDocuments(query)
       ]);
-  
-      const result = {
+      
+      const totalPages = Math.ceil(total / limit);
+      
+      const responsePayload = {
         message: "Data found",
-        response: models,
-        pagination: {
+        metadata: {
           total,
           page,
           limit,
-          totalPages: Math.ceil(total / limit),
+          totalPages,
+          filters: {
+            search: search || null,
+            industry: industry || null,
+            roleLevel: roleLevel || null,
+          }
         },
+        response: models,
       };
-  
+
       // Cache the result for 1 hour
-      await setCachedData(key, result, CACHE_DURATION.MEDIUM);
-  
-      res.status(200).json(result);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+      res.status(200).json(responsePayload);
+      
+    } catch (error) {
+      console.log('error :>> ', error);
+      res.status(400).json({error: error.message});
     }
   }
   

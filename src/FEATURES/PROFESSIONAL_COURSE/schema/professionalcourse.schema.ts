@@ -18,7 +18,7 @@ const ProfessionalCourseSchema = new mongoose.Schema(
     },
     professional: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "professional", // Reference to University model
+      ref: "admin", // Reference to University model
       required: false, // Optional field
     },
     nameOfProvider: {type: String, required: false},

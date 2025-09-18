@@ -295,40 +295,127 @@ export class JobsController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
-  
-            const key = CACHE_KEYS.JOBS.PUBLIC(page, limit);
+      
+      // Extract search and filter parameters
+      const search = req.query.search as string;
+      const jobCategory = req.query.jobCategory as string;
+      const jobType = req.query.jobType as string;
+      const workPreference = req.query.workPreference as string;
+      const experienceLevel = req.query.experienceLevel as string;
+      const organizationType = req.query.organizationType as string;
+      const industry = req.query.industry as string;
+      const location = req.query.location as string;
+      const country = req.query.country as string;
+      const includeExpired = req.query.includeExpired as string;
 
+      // Build the base query
+      let query: any = { status: "ACTIVE" };
+
+      // Add search functionality (searches across job title, employer, and description)
+      if (search) {
+        query.$or = [
+          { jobTitle: { $regex: search, $options: 'i' } },
+          { employer: { $regex: search, $options: 'i' } },
+          { overviewOfRole: { $regex: search, $options: 'i' } },
+          { jobDescription: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      // Add filter parameters
+      if (jobCategory) {
+        query.jobCategory = { $regex: jobCategory, $options: 'i' };
+      }
+
+      if (jobType) {
+        query.jobType = { $regex: jobType, $options: 'i' };
+      }
+
+      if (workPreference) {
+        query.workPreference = { $regex: workPreference, $options: 'i' };
+      }
+
+      if (experienceLevel) {
+        query.experienceLevel = { $regex: experienceLevel, $options: 'i' };
+      }
+
+      if (organizationType) {
+        query.organizationType = { $regex: organizationType, $options: 'i' };
+      }
+
+      if (industry) {
+        query.industry = { $regex: industry, $options: 'i' };
+      }
+
+      if (location) {
+        query.location = { $regex: location, $options: 'i' };
+      }
+
+      if (country) {
+        query.country = { $regex: country, $options: 'i' };
+      }
+
+      // Filter out expired deadlines unless explicitly requested
+      if (includeExpired !== 'true') {
+        query.$and = [
+          {
+            $or: [
+              { deadline: { $exists: false } },
+              { deadline: null },
+              { deadline: { $gte: new Date() } }
+            ]
+          }
+        ];
+      }
+
+      // Create cache key that includes search and filter parameters
+      const cacheKey = `jobs_public_${page}_${limit}_${search || ''}_${jobCategory || ''}_${jobType || ''}_${workPreference || ''}_${experienceLevel || ''}_${organizationType || ''}_${industry || ''}_${location || ''}_${country || ''}_${includeExpired || ''}`;
+      
       // Check cache first
-      const cachedData = await getCachedData(key);
+      const cachedData = await getCachedData(cacheKey);
       if (cachedData) {
         return res.json(cachedData);
       }
-  
+
       const [models, total] = await Promise.all([
-        JobsModel.find({ status: "ACTIVE" })
+        JobsModel.find(query)
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        JobsModel.countDocuments({ status: "ACTIVE" }),
+        JobsModel.countDocuments(query)
       ]);
-  
-      const result = {
+      
+      const totalPages = Math.ceil(total / limit);
+      
+      const responsePayload = {
         message: "Data found",
-        response: models,
-        pagination: {
+        metadata: {
           total,
           page,
           limit,
-          totalPages: Math.ceil(total / limit),
+          totalPages,
+          filters: {
+            search: search || null,
+            jobCategory: jobCategory || null,
+            jobType: jobType || null,
+            workPreference: workPreference || null,
+            experienceLevel: experienceLevel || null,
+            organizationType: organizationType || null,
+            industry: industry || null,
+            location: location || null,
+            country: country || null,
+            includeExpired: includeExpired === 'true' || null,
+          }
         },
+        response: models,
       };
-  
+
       // Cache the result for 1 hour
-      await setCachedData(key, result, CACHE_DURATION.MEDIUM);
-  
-      res.status(200).json(result);
+      await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+      res.status(200).json(responsePayload);
+      
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      console.log('error :>> ', error);
+      res.status(400).json({error: error.message});
     }
   }
   

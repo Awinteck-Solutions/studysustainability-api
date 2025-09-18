@@ -245,41 +245,78 @@ export class GrantsController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const skip = (page - 1) * limit;
-  
-            const key = CACHE_KEYS.GRANTS.PUBLIC(page, limit);
+      
+      // Extract search and filter parameters
+      const search = req.query.search as string;
+      const includeExpired = req.query.includeExpired as string;
 
+      // Build the base query
+      let query: any = { status: "ACTIVE" };
+
+      // Add search functionality (searches across title, summary, and benefits)
+      if (search) {
+        query.$or = [
+          { titleOfGrant: { $regex: search, $options: 'i' } },
+          { summary: { $regex: search, $options: 'i' } },
+          { benefits: { $regex: search, $options: 'i' } },
+          { eligibility: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      // Filter out expired deadlines unless explicitly requested
+      if (includeExpired !== 'true') {
+        query.$and = [
+          {
+            $or: [
+              { deadline: { $exists: false } },
+              { deadline: null },
+              { deadline: { $gte: new Date() } }
+            ]
+          }
+        ];
+      }
+
+      // Create cache key that includes search and filter parameters
+      const cacheKey = `grants_public_${page}_${limit}_${search || ''}_${includeExpired || ''}`;
+      
       // Check cache first
-      const cachedData = await getCachedData(key);
+      const cachedData = await getCachedData(cacheKey);
       if (cachedData) {
-        console.log("✅ Returning cached data");
         return res.json(cachedData);
       }
-  
+
       const [models, total] = await Promise.all([
-        GrantsModel.find({ status: "ACTIVE" })
+        GrantsModel.find(query)
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit),
-        GrantsModel.countDocuments({ status: "ACTIVE" }),
+        GrantsModel.countDocuments(query)
       ]);
-  
-      const result = {
+      
+      const totalPages = Math.ceil(total / limit);
+      
+      const responsePayload = {
         message: "Data found",
-        response: models,
-        pagination: {
+        metadata: {
           total,
           page,
           limit,
-          totalPages: Math.ceil(total / limit),
+          totalPages,
+          filters: {
+            search: search || null,
+            includeExpired: includeExpired === 'true' || null,
+          }
         },
+        response: models,
       };
-  
-      // Cache the result
-      await setCachedData(key, result, CACHE_DURATION.MEDIUM);
-  
-      res.status(200).json(result);
+
+      // Cache the result for 1 hour
+      await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+      res.status(200).json(responsePayload);
+      
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      console.log('error :>> ', error);
+      res.status(400).json({error: error.message});
     }
   }
   

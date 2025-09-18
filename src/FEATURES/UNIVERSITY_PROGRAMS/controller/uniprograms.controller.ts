@@ -419,6 +419,7 @@ export class UniProgramsController {
       const location = req.query.location as string;
       const startTerm = req.query.startTerm as string;
       const delivery = req.query.delivery as string;
+      const universityId = req.query.universityId as string;
 
       // Build the base query
       let query: any = { status: "ACTIVE" };
@@ -447,9 +448,6 @@ export class UniProgramsController {
         query.qualificationType = { $regex: qualificationType, $options: 'i' };
       }
 
-      if (institution) {
-        query.nameOfInstitution = { $regex: institution, $options: 'i' };
-      }
 
       if (location) {
         query.location = { $regex: location, $options: 'i' };
@@ -463,8 +461,17 @@ export class UniProgramsController {
         query.delivery = { $regex: delivery, $options: 'i' };
       }
 
+      // Handle universityId filter
+      if (universityId) {
+        // If universityId is provided, filter by the university field in uniprograms schema
+        query.university = universityId;
+      } else if (institution) {
+        // If universityId is null/not provided, fall back to institution filter on nameOfInstitution
+        query.nameOfInstitution = { $regex: institution, $options: 'i' };
+      }
+
       // Create cache key that includes search and filter parameters
-      const cacheKey = `uniprograms_public_${page}_${limit}_${search || ''}_${discipline || ''}_${studyType || ''}_${qualificationType || ''}_${institution || ''}_${location || ''}_${startTerm || ''}_${delivery || ''}`;
+      const cacheKey = `uniprograms_public_${page}_${limit}_${search || ''}_${discipline || ''}_${studyType || ''}_${qualificationType || ''}_${institution || ''}_${location || ''}_${startTerm || ''}_${delivery || ''}_${universityId || ''}`;
       
       // Check cache first
       const cachedData = await getCachedData(cacheKey);
@@ -498,6 +505,7 @@ export class UniProgramsController {
             location: location || null,
             startTerm: startTerm || null,
             delivery: delivery || null,
+            universityId: universityId || null,
           }
         },
         response: models,
@@ -513,11 +521,11 @@ export class UniProgramsController {
     }
   }
 
-  // Get unique institution names from both nameOfInstitution field and university references
-  // Returns institutions with their ID (for university references) and organization name
+  // Get unique institution names from both nameOfInstitution field and admin schema universities
+  // Returns institutions with their ID (for admin universities) and organization name
   static async getUniqueInstitutions(req: Request, res: Response) {
     try {
-      const key = 'uniprograms_unique_institutions';
+      const key = 'uniprograms_unique_institutions_v4';
       
       // Check cache first
       const cachedData = await getCachedData(key);
@@ -547,47 +555,19 @@ export class UniProgramsController {
         }
       ]);
 
-      // Get unique universities from university field (referenced universities)
-      const universityInstitutions = await UniProgramModel.aggregate([
-        {
-          $match: {
-            status: "ACTIVE",
-            university: { $exists: true, $ne: null }
-          }
-        },
-        {
-          $lookup: {
-            from: "admins", // Assuming universities are stored as admin users
-            localField: "university",
-            foreignField: "_id",
-            as: "universityData"
-          }
-        },
-        {
-          $unwind: {
-            path: "$universityData",
-            preserveNullAndEmptyArrays: true
-          }
-        },
-        {
-          $match: {
-            "universityData.organisationName": { $exists: true, $nin: [null, ""] }
-          }
-        },
-        {
-          $group: {
-            _id: "$university",
-            organisationName: { $first: "$universityData.organisationName" }
-          }
-        },
-        {
-          $project: {
-            _id: 1,
-            name: "$organisationName",
-            type: "university"
-          }
-        }
-      ]);
+      // Get universities directly from admin schema
+      const AdminModel = require('../../AUTH/schema/admin.schema').default;
+      const adminUniversities = await AdminModel.find({
+        status: "ACTIVE",
+        organisationName: { $exists: true, $nin: [null, ""] }
+      }).select('_id organisationName');
+
+      // Transform admin universities to match the expected format
+      const universityInstitutions = adminUniversities.map(admin => ({
+        _id: admin._id,
+        name: admin.organisationName,
+        type: "university"
+      }));
 
       // Combine both types of institutions
       const allInstitutions = [
