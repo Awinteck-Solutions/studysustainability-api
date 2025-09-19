@@ -5,6 +5,8 @@ import mongoose from "mongoose";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
 import { uploadFile } from "../../../util/s3";
+import Engagement from "../../Engagement/schema/Engagement.schema";
+import InterestForm from "../../INTERESTFORM/schema/InterestForm.schema";
 
 interface MulterRequest extends Request {
   file?: multer.File;
@@ -414,5 +416,85 @@ static async getAllPublic(req: Request, res: Response) {
   }
 }
 
+static async getEventsDashboardMetrics(req: Request, res: Response) {
+  try {
+    const organiserUserId = req["currentUser"].id;
+
+    if (!organiserUserId) {
+      return res.status(400).json({
+        success: false,
+        message: "Organiser user ID is required",
+      });
+    }
+
+    const organiserObjectId = new mongoose.Types.ObjectId(organiserUserId);
+
+    // 1️⃣ Total events & active events
+    const [totalEvents, totalActiveEvents] = await Promise.all([
+      EventsModel.countDocuments({organiser: organiserObjectId, status: {$ne: "DELETED"}}),
+      EventsModel.countDocuments({
+        organiser: organiserObjectId,
+        status: "ACTIVE",
+      }),
+    ]);
+
+    // 2️⃣ Get all event _ids for this organiser
+    const eventIds = await EventsModel.find(
+      {organiser: organiserObjectId},
+      {_id: 1}
+    ).lean();
+
+    const eventIdList = eventIds.map((e) => e._id);
+
+    // 3️⃣ Total registered interests
+    const totalRegisteredInterests = await InterestForm.countDocuments({
+      menuId: {$in: eventIdList},
+      menu: "Events",
+    });
+
+    // 4️⃣ Total views from Engagement (type: VIEW)
+    const engagementAggregation = await Engagement.aggregate([
+      {
+        $match: {
+          item: {$in: eventIdList},
+          type: "VIEW",
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalViews: {$sum: "$value"},
+        },
+      },
+    ]);
+
+    const totalViews =
+      engagementAggregation.length > 0
+        ? engagementAggregation[0].totalViews
+        : 0;
+
+    console.log('object :>> ', totalEvents,
+        totalActiveEvents,
+        totalRegisteredInterests,
+      totalViews,);
+    
+    return res.status(200).json({
+      success: true,
+      message: "Events dashboard metrics fetched successfully",
+      response: {
+        totalEvents,
+        totalActiveEvents,
+        totalRegisteredInterests,
+        totalViews,
+      },
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({
+      success: false,
+      message: "System error",
+    });
+  }
+}
 
 }

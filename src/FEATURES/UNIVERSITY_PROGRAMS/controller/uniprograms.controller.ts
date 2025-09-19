@@ -7,6 +7,8 @@ import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedDa
 import { uploadFile } from "../../../util/s3";
 import redis from "../../../util/redis";
 import { qualificationType } from "../enums/qualificationTypes.enums";
+import Engagement from "../../Engagement/schema/Engagement.schema";
+import InterestForm from "../../INTERESTFORM/schema/InterestForm.schema";
 // import * as sanitizeHtml from "sanitize-html";
 const sanitizeHtml = require("sanitize-html");
 
@@ -611,6 +613,84 @@ export class UniProgramsController {
     } catch (error) {
       console.log('error :>> ', error);
       res.status(400).json({ error: error.message });
+    }
+  }
+
+  static async getUniversityDashboardMetrics(req: Request, res: Response) {
+    try {
+      const universityUserId = req["currentUser"].id;
+
+      if (!universityUserId) {
+        return res.status(400).json({
+          success: false,
+          message: "University user ID is required",
+        });
+      }
+
+      const universityObjectId = new mongoose.Types.ObjectId(universityUserId);
+
+      // 1️⃣ Total programs & active programs
+      const [totalPrograms, totalActivePrograms] = await Promise.all([
+        UniProgramModel.countDocuments({university: universityObjectId,status: {$ne: "DELETED"}}),
+        UniProgramModel.countDocuments({
+          university: universityObjectId,
+          status: "ACTIVE",
+        }),
+      ]);
+
+      // 2️⃣ Get all program _ids for this university user
+      const programIds = await UniProgramModel.find(
+        {university: universityObjectId},
+        {_id: 1}
+      ).lean();
+
+      console.log('programIds :>> ', programIds);
+
+      const programIdList = programIds.map((p) => p._id);
+
+      // 3️⃣ Total registered interests
+      const totalRegisteredInterests = await InterestForm.countDocuments({
+        menuId: {$in: programIdList},
+        menu: "UniversityPrograms",
+      });
+
+      // 4️⃣ Total views from Engagement (type: VIEW)
+      const engagementAggregation = await Engagement.aggregate([
+        {
+          $match: {
+            item: {$in: programIdList},
+            type: "VIEW",
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalViews: {$sum: "$value"},
+          },
+        },
+      ]);
+
+      const totalViews =
+        engagementAggregation.length > 0
+          ? engagementAggregation[0].totalViews
+          : 0;
+
+      return res.status(200).json({
+        success: true,
+        message: "University dashboard metrics fetched successfully",
+        response: {
+          totalPrograms,
+          totalActivePrograms,
+          totalRegisteredInterests,
+          totalViews,
+        },
+      });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({
+        success: false,
+        message: "System error",
+      });
     }
   }
 }

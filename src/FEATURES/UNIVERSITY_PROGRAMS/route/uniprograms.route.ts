@@ -86,6 +86,14 @@ Router.delete("/permanent/:id",
     }
 );
 
+Router.get(
+  "/dashboard-metrics",
+    authentification,
+    (req: Request, res: Response) => {
+        UniProgramsController.getUniversityDashboardMetrics(req, res)
+    }
+);
+
 Router.get("/:id",
     (req: Request, res: Response) => {
         UniProgramsController.getOne(req, res)

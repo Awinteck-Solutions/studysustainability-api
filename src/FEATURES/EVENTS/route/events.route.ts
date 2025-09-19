@@ -75,6 +75,13 @@ Router.get("/public", (req: Request, res: Response) => {
     }
 );
 
+Router.get(
+  "/dashboard-metrics",
+    authentification,
+    (req: Request, res: Response) => {
+        EventsController.getEventsDashboardMetrics(req, res)
+    }
+);
 
 Router.get("/:id",
     (req: Request, res: Response) => {

@@ -5,6 +5,8 @@ import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
 import { uploadFile } from "../../../util/s3";
+import Engagement from "../../Engagement/schema/Engagement.schema";
+import InterestForm from "../../INTERESTFORM/schema/InterestForm.schema";
 
 interface MulterRequest extends Request {
   file?: multer.File;
@@ -452,6 +454,86 @@ export class ProfessionalCourseController {
     } catch (error) {
       console.log('error :>> ', error);
       res.status(400).json({error: error.message});
+    }
+  }
+
+  static async getProfessionalDashboardMetrics(req: Request, res: Response) {
+    try {
+      const professionalUserId = req["currentUser"].id;
+
+      if (!professionalUserId) {
+        return res.status(400).json({
+          success: false,
+          message: "Professional user ID is required",
+        });
+      }
+
+      const professionalObjectId = new mongoose.Types.ObjectId(
+        professionalUserId
+      );
+
+      // 1️⃣ Total professional courses & active courses
+      const [totalCourses, totalActiveCourses] = await Promise.all([
+        ProfessionalCourseModel.countDocuments({
+          professional: professionalObjectId, status: {$ne: "DELETED"}
+        }),
+        ProfessionalCourseModel.countDocuments({
+          professional: professionalObjectId,
+          status: "ACTIVE",
+        }),
+      ]);
+
+      // 2️⃣ Get all course _ids for this professional user
+      const courseIds = await ProfessionalCourseModel.find(
+        {professional: professionalObjectId},
+        {_id: 1}
+      ).lean();
+
+      const courseIdList = courseIds.map((c) => c._id);
+
+      // 3️⃣ Total registered interests
+      const totalRegisteredInterests = await InterestForm.countDocuments({
+        menuId: {$in: courseIdList},
+        menu: "ProfessionalCourses",
+      });
+
+      // 4️⃣ Total views from Engagement (type: VIEW)
+      const engagementAggregation = await Engagement.aggregate([
+        {
+          $match: {
+            item: {$in: courseIdList},
+            type: "VIEW",
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalViews: {$sum: "$value"},
+          },
+        },
+      ]);
+
+      const totalViews =
+        engagementAggregation.length > 0
+          ? engagementAggregation[0].totalViews
+          : 0;
+
+      return res.status(200).json({
+        success: true,
+        message: "Professional dashboard metrics fetched successfully",
+        response: {
+          totalCourses,
+          totalActiveCourses,
+          totalRegisteredInterests,
+          totalViews,
+        },
+      });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({
+        success: false,
+        message: "System error",
+      });
     }
   }
   
