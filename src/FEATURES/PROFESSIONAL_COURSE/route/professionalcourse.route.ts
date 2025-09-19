@@ -17,7 +17,7 @@ interface MulterRequest extends Request {
   
 Router.post("/",
     authentification,
-    authorization(AdminModel,[Roles.ADMIN, Roles.USER],[Permission.ALL,Permission.PROFESSIONAL_COURSE]),
+    authorization(AdminModel,[Roles.ADMIN, Roles.USER, Roles.PROFESSIONALS],[Permission.ALL,Permission.PROFESSIONAL_COURSE]),
     upload.single("professionals"),
     (req: MulterRequest, res: Response) => {
         ProfessionalCourseController.create(req, res)
@@ -26,7 +26,7 @@ Router.post("/",
 
 Router.patch("/:id",
     authentification,
-    authorization(AdminModel,[Roles.ADMIN, Roles.USER],[Permission.ALL,Permission.PROFESSIONAL_COURSE]),
+    authorization(AdminModel,[Roles.ADMIN, Roles.USER, Roles.PROFESSIONALS],[Permission.ALL,Permission.PROFESSIONAL_COURSE]),
     upload.single("professionals"),
     (req: MulterRequest, res: Response) => {
         ProfessionalCourseController.update(req, res)
@@ -36,7 +36,7 @@ Router.patch("/:id",
 
 Router.patch("/image/:id",
     authentification,
-    authorization(AdminModel,[Roles.ADMIN, Roles.USER],[Permission.ALL,Permission.PROFESSIONAL_COURSE]),
+    authorization(AdminModel,[Roles.ADMIN, Roles.USER, Roles.PROFESSIONALS],[Permission.ALL,Permission.PROFESSIONAL_COURSE]),
     upload.single("professionals"),
     (req: MulterRequest, res: Response) => {
         ProfessionalCourseController.updateImage(req, res)
@@ -45,7 +45,7 @@ Router.patch("/image/:id",
 
 Router.get("/",
     authentification,
-    authorization(AdminModel,[Roles.ADMIN, Roles.USER],[Permission.ALL,Permission.PROFESSIONAL_COURSE]),
+    authorization(AdminModel,[Roles.ADMIN, Roles.USER, Roles.PROFESSIONALS],[Permission.ALL,Permission.PROFESSIONAL_COURSE]),
     (req: Request, res: Response) => {
         ProfessionalCourseController.getAll(req, res)
     }

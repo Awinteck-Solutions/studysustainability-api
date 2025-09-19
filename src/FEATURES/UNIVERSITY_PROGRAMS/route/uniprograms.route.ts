@@ -17,7 +17,7 @@ interface MulterRequest extends Request {
   
 Router.post("/",
     authentification,
-    authorization(AdminModel,[Roles.ADMIN, Roles.USER],[Permission.ALL,Permission.UNIVERSITY_PROGRAMS]),
+    authorization(AdminModel,[Roles.ADMIN, Roles.USER, Roles.UNIVERSITY],[Permission.ALL,Permission.UNIVERSITY_PROGRAMS]),
     upload.single("uniprograms"),
     (req: MulterRequest, res: Response) => {
         UniProgramsController.create(req, res)
@@ -26,7 +26,7 @@ Router.post("/",
 
 Router.patch("/:id",
     authentification,
-    authorization(AdminModel,[Roles.ADMIN, Roles.USER],[Permission.ALL,Permission.UNIVERSITY_PROGRAMS]),
+    authorization(AdminModel,[Roles.ADMIN, Roles.USER, Roles.UNIVERSITY],[Permission.ALL,Permission.UNIVERSITY_PROGRAMS]),
     upload.single("uniprograms"),
     (req: MulterRequest, res: Response) => {
         UniProgramsController.update(req, res)
@@ -36,7 +36,7 @@ Router.patch("/:id",
 
 Router.patch("/image/:id",
     authentification,
-    authorization(AdminModel,[Roles.ADMIN, Roles.USER],[Permission.ALL,Permission.UNIVERSITY_PROGRAMS]),
+    authorization(AdminModel,[Roles.ADMIN, Roles.USER, Roles.UNIVERSITY],[Permission.ALL,Permission.UNIVERSITY_PROGRAMS]),
     upload.single("uniprograms"),
     (req: MulterRequest, res: Response) => {
         UniProgramsController.updateImage(req, res)
@@ -48,7 +48,7 @@ Router.patch("/image/:id",
 
 Router.get("/",
     authentification,
-    authorization(AdminModel,[Roles.ADMIN, Roles.USER],[Permission.ALL,Permission.UNIVERSITY_PROGRAMS]),
+    authorization(AdminModel,[Roles.ADMIN, Roles.USER, Roles.UNIVERSITY],[Permission.ALL,Permission.UNIVERSITY_PROGRAMS]),
     (req: Request, res: Response) => {
         UniProgramsController.getAll(req, res)
     }
