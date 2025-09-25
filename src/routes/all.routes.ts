@@ -25,6 +25,8 @@ import emailCampaignRoutes from '../FEATURES/EmailCampaign/route/EmailCampaign.r
 import displayAdvertRoutes from '../FEATURES/DisplayAdvert/route/DisplayAdvert.route';
 import subscriberRoutes from '../FEATURES/SUBSCRIBER/route/subscriber.route';
 import advertiseRoutes from '../FEATURES/ADVERTISE/route/advertise.route';
+import advertiseWithUsRoutes from '../FEATURES/ADVERTISE_WITH_US/route/advertiseWithUs.route';
+import websiteFeedbackRoutes from '../FEATURES/WEBSITE_FEEDBACK/route/websiteFeedback.route';
 const Router = express.Router();
 
 Router.use("/auth", authRoutes);
@@ -54,9 +56,11 @@ Router.use("/market-insights", marketInsightsRoutes);
 Router.use("/interest-form", interestFormRoutes);
 Router.use("/engagement", engagementRoutes);
 Router.use("/email-campaign", emailCampaignRoutes);
-Router.use("/display-advert", displayAdvertRoutes);
+Router.use("/display-adverts", displayAdvertRoutes);
 Router.use("/subscribers", subscriberRoutes);
 Router.use("/advertise", advertiseRoutes);
+Router.use("/advertise-with-us", advertiseWithUsRoutes);
+Router.use("/website-feedback", websiteFeedbackRoutes);
 
 
 export { Router }

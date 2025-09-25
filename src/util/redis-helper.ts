@@ -83,6 +83,18 @@ export const CACHE_KEYS = {
     ALL: '/advertise/',
     BY_ID: (id: string) => `/advertise/${id}`,
     PUBLIC: (page: number, limit: number) => `/advertise/public?page=${page}&limit=${limit}`
+  },
+  
+  // Advertise With Us
+  ADVERTISE_WITH_US: {
+    ALL: '/advertise-with-us/',
+    BY_ID: (id: string) => `/advertise-with-us/${id}`
+  },
+  
+  // Website Feedback
+  WEBSITE_FEEDBACK: {
+    ALL: '/website-feedback/',
+    BY_ID: (id: string) => `/website-feedback/${id}`
   }
 };
 
@@ -123,9 +135,34 @@ export const invalidateCache = async (feature: string, itemId?: string) => {
       }
     }
 
+    // Invalidate custom cache keys for specific features
+    if (feature === 'ADVERTISE_WITH_US') {
+      await invalidateCustomCacheKeys('advertise_with_us_');
+    } else if (feature === 'WEBSITE_FEEDBACK') {
+      await invalidateCustomCacheKeys('website_feedback_');
+    }
+
     console.log(`✅ Cache invalidated for ${feature}${itemId ? ` (ID: ${itemId})` : ''}`);
   } catch (error) {
     console.error(`❌ Cache invalidation error for ${feature}:`, error);
+  }
+};
+
+// Helper function to invalidate custom cache keys
+const invalidateCustomCacheKeys = async (pattern: string) => {
+  try {
+    // Get all keys matching the pattern
+    const keys = await redis.keys(`${pattern}*`);
+    
+    if (keys.length > 0) {
+      // Delete all matching keys one by one
+      for (const key of keys) {
+        await redis.del(key);
+      }
+      console.log(`✅ Invalidated ${keys.length} custom cache keys for pattern: ${pattern}`);
+    }
+  } catch (error) {
+    console.error(`❌ Error invalidating custom cache keys for pattern ${pattern}:`, error);
   }
 };
 

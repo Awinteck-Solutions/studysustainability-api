@@ -110,7 +110,7 @@ const UniProgramSchema = new Schema({
     registerInterest: { type: String },
     applyLink: { type: String },
 
-    status: { type: String, enum:status, default: status.ACTIVE },
+    status: { type: String, enum:status, default: status.INACTIVE },
     },
     { timestamps: true }
 );

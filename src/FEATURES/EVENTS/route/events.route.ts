@@ -17,7 +17,7 @@ interface MulterRequest extends Request {
   
 Router.post("/",
     authentification,
-    authorization(AdminModel,[Roles.ADMIN, Roles.USER],[Permission.ALL,Permission.EVENTS]),
+    authorization(AdminModel,[Roles.ADMIN, Roles.EVENT_ORGANIZER, Roles.USER],[Permission.ALL,Permission.EVENTS]),
     upload.single("events"),
     (req: MulterRequest, res: Response) => {
         EventsController.create(req, res)
@@ -26,7 +26,7 @@ Router.post("/",
 
 Router.patch("/:id",
     authentification,
-    authorization(AdminModel,[Roles.ADMIN, Roles.USER],[Permission.ALL,Permission.EVENTS]),
+    authorization(AdminModel,[Roles.ADMIN, Roles.EVENT_ORGANIZER, Roles.USER],[Permission.ALL,Permission.EVENTS]),
     upload.single("events"),
     (req: MulterRequest, res: Response) => {
         EventsController.update(req, res)
@@ -36,7 +36,7 @@ Router.patch("/:id",
 
 Router.patch("/image/:id",
     authentification,
-    authorization(AdminModel,[Roles.ADMIN, Roles.USER],[Permission.ALL,Permission.EVENTS]),
+    authorization(AdminModel,[Roles.ADMIN, Roles.EVENT_ORGANIZER, Roles.USER],[Permission.ALL,Permission.EVENTS]),
     upload.single("events"),
     (req: MulterRequest, res: Response) => {
         EventsController.updateImage(req, res)
@@ -48,7 +48,7 @@ Router.patch("/image/:id",
 
 Router.get("/",
     authentification,
-    authorization(AdminModel,[Roles.ADMIN, Roles.USER],[Permission.ALL,Permission.EVENTS]),
+    authorization(AdminModel,[Roles.ADMIN, Roles.EVENT_ORGANIZER, Roles.USER],[Permission.ALL,Permission.EVENTS]),
     (req: Request, res: Response) => {
         EventsController.getAll(req, res)
     }
@@ -78,6 +78,7 @@ Router.get("/public", (req: Request, res: Response) => {
 Router.get(
   "/dashboard-metrics",
     authentification,
+    authorization(AdminModel,[Roles.ADMIN, Roles.EVENT_ORGANIZER, Roles.USER],[Permission.ALL,Permission.EVENTS]),
     (req: Request, res: Response) => {
         EventsController.getEventsDashboardMetrics(req, res)
     }

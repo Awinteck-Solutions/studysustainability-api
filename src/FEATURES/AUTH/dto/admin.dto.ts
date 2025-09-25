@@ -13,6 +13,32 @@ export class AdminDto {
   @Expose() createdAt;
   @Expose() updatedAt;
 
+  @Expose() countryOfOrigin;
+  @Expose() countryOfResidence;
+  @Expose() cityOfResidence;
+  @Expose() gender;
+  @Expose() ageRange;
+  @Expose() levelOfStudy;
+  @Expose() academicProgramInterest;
+  @Expose() graduateRecruitmentInterest;
+  @Expose() qualificationType;
+  @Expose() website;
+  @Expose() extraEmail;
+  @Expose() accreditation;
+  @Expose() eventTypes;
+  @Expose() fullname;
+  @Expose() facebook;
+  @Expose() twitter;
+  @Expose() instagram;
+  @Expose() linkedin;
+  @Expose() youtube;
+  @Expose() tiktok;
+  @Expose() pinterest;
+  @Expose() aboutUs;
+  @Expose() whyStudyWithUs;
+  @Expose() campusLife;
+  
+
 }
 
 export const formatAdminResponse = (user, token) => {

@@ -55,7 +55,7 @@ const ProfessionalCourseSchema = new mongoose.Schema(
     },
     image: {type: String, required: false},
     howToApply: {type: String, required: false},
-    status: {type: String, enum: status, default: status.ACTIVE},
+    status: {type: String, enum: status, default: status.INACTIVE},
   },
   {timestamps: true}
 );

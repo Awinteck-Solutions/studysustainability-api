@@ -75,6 +75,7 @@ Router.get("/public", (req: Request, res: Response) => {
 Router.get(
   "/dashboard-metrics",
     authentification,
+    authorization(AdminModel,[Roles.ADMIN, Roles.USER, Roles.PROFESSIONALS],[Permission.ALL,Permission.PROFESSIONAL_COURSE]),
     (req: Request, res: Response) => {
         ProfessionalCourseController.getProfessionalDashboardMetrics(req, res)
     }

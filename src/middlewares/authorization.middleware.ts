@@ -9,11 +9,11 @@ export const authorization = (
 ): any => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      console.log('req["currentUser"] :>> ', req["currentUser"]);
+      // console.log('req["currentUser"] :>> ', req["currentUser"]);
       const key = `authorization-${req["currentUser"].id}`;
-      console.log("key :>> ", key); 
+      // console.log("key :>> ", key); 
       let user = await cacheOrFetchMain(key, model, req["currentUser"].id)
-      console.log("user-auhorization :>> ", user);
+      // console.log("user-auhorization :>> ", user);
 
       if (!roles.includes(user.role)) {
         return res.status(403).json({message: "Forbidden"});
@@ -36,18 +36,17 @@ export const authorization = (
 const cacheOrFetchMain = async (key, model, id) => {
 
     try {
-      let cachedData = await redis.get(key);
-      if (cachedData) {
-        console.log('✅✅cachedData :>> ', cachedData);
-        return JSON.parse(cachedData);
-      } else {
+      // let cachedData = await redis.get(key);
+      // if (cachedData) {
+      //   console.log('✅✅cachedData :>> ', cachedData);
+      //   return JSON.parse(cachedData);
+      // } else {
         const data = await model.findById(id)
-        console.log('cacheOrFetchMain-data :>> ', data);
-        await redis.setEx(key, 3600 * 24, JSON.stringify(data));
+        // console.log('cacheOrFetchMain-data :>> ', data);
+        // await redis.setEx(key, 3600 * 24, JSON.stringify(data));
         return data
-      }
+      // }
     } catch (error) {
       console.log(error);
     }
-
 };

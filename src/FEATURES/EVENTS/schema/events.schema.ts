@@ -17,12 +17,11 @@ const EventsSchema = new mongoose.Schema(
       ref: "admin", 
       required: false,
   },
-      organiser: {
+    organiser: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "admin", // Reference to University model
             required: false, // Optional field
     },
-      
     nameOfProvider: { type: String, required: false }, // Optional for events that may not have a provider
     titleOfEvent: { type: String, required: true },
     eventType: {
@@ -44,8 +43,6 @@ const EventsSchema = new mongoose.Schema(
     eligibility: { type: String }, // Who is eligible to attend
     application: { type: String }, // Application process details
     moreInfoLink: { type: String },
-       
-      
     language: {
       type: String,
       required: false,
@@ -53,8 +50,7 @@ const EventsSchema = new mongoose.Schema(
     applyLink: { type: String },
     image: { type: String, required: false },
     howToApply: { type: String, required: false },
-    status: { type: String, enum: status, default: status.ACTIVE },
-        
+    status: { type: String, enum: status, default: status.INACTIVE },
   },
   { timestamps: true }
 );

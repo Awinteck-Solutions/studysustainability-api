@@ -6,7 +6,13 @@ import AdminModel from "../schema/admin.schema";
 import {status} from "../enums/status.enum";
 import {Roles} from "../enums/roles.enum";
 import {Permission} from "../enums/permission.enum";
+import {uploadFile} from "../../../util/s3";
+import multer from "multer";
 
+interface MulterRequest extends Request {
+  file?: multer.File;
+  files?: multer.File[];
+}
 export class AuthController {
   // SIGNUP
   static async signup(req: Request, res: Response) {
@@ -40,7 +46,7 @@ export class AuthController {
         .save()
         .then((response) => {
           const token = encrypt.generateToken({
-            _id: response._id,
+            id: response._id,
             email: response.email,
             firstname: response.firstname,
             lastname: response.lastname,
@@ -51,6 +57,7 @@ export class AuthController {
             message: "New user registered",
             response: {
               ...formatAdminResponse(response, token),
+              _id: response._id,
               id: response._id,
             },
           });
@@ -139,7 +146,9 @@ export class AuthController {
       const {id} = req["currentUser"];
       console.log("id :>> ", id);
       const response = await AdminModel.findById(id);
-      return res.status(201).json({
+      console.log('formatAdminResponse(response, null)', formatAdminResponse(response, null))
+      return res.status(200).json({
+        status: true,
         message: "Success",
         response: formatAdminResponse(response, null),
       });
@@ -176,7 +185,7 @@ export class AuthController {
     }
   }
 
-  static async addProfile(req: Request, res: Response) {
+  static async addProfile(req: MulterRequest, res: Response) {
     try {
       const admin = await AdminModel.findByIdAndUpdate(
         req.params.id,
@@ -197,6 +206,123 @@ export class AuthController {
     } catch (error) {
       console.error(error);
       return res.status(500).json({
+        message: "Internal server error",
+        error: error.message || error,
+      });
+    }
+  }
+
+  // UPLOAD PROFILE IMAGE
+  static async uploadProfileImage(req: MulterRequest, res: Response) {
+    try {
+      const {id} = req["currentUser"];
+      
+      if (!req.file) {
+        return res.status(400).json({
+          message: "No image file provided",
+        });
+      }
+ 
+      // Upload to S3
+      const uploadResult = await uploadFile(req.file, 'profile-images');
+      
+      // Update admin profile with image URL
+      const admin = await AdminModel.findByIdAndUpdate(
+        id,
+        {image: uploadResult.Location},
+        {new: true, runValidators: true}
+      );
+
+      if (!admin) {
+        return res.status(404).json({
+          message: "Admin not found",
+        });
+      }
+
+      return res.status(200).json({
+        message: "Profile image uploaded successfully",
+        response: {
+          imageUrl: uploadResult.Location,
+          admin: formatAdminResponse(admin, null),
+        },
+      });
+    } catch (error) { 
+      return res.status(500).json({
+        message: "Internal server error",
+        error: error.message || error,
+      });
+    }
+  }
+
+  // CHANGE PASSWORD
+  static async changePassword(req: Request, res: Response) {
+    try {
+      const {id} = req["currentUser"];
+      const {currentPassword, newPassword} = req.body;
+
+      // Validate required fields
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({
+          message: "Current password and new password are required",
+        });
+      }
+
+      // Validate new password strength
+      if (newPassword.length < 6) {
+        return res.status(400).json({
+          message: "New password must be at least 6 characters long",
+        });
+      }
+
+      // Find the admin
+      const admin = await AdminModel.findById(id);
+      if (!admin) {
+        return res.status(404).json({
+          message: "Admin not found",
+        });
+      }
+
+      // Verify current password
+      const isCurrentPasswordCorrect = await encrypt.comparepassword(
+        admin.password,
+        currentPassword
+      );
+
+      if (!isCurrentPasswordCorrect) {
+        return res.status(400).json({
+          message: "Current password is incorrect",
+        });
+      }
+
+      // Check if new password is different from current password
+      const isSamePassword = await encrypt.comparepassword(
+        admin.password,
+        newPassword
+      );
+
+      if (isSamePassword) {
+        return res.status(400).json({
+          message: "New password must be different from current password",
+        });
+      }
+
+      // Encrypt new password
+      const encryptedNewPassword = await encrypt.encryptpass(newPassword);
+
+      // Update password
+      await AdminModel.findByIdAndUpdate(
+        id,
+        {password: encryptedNewPassword},
+        {new: true, runValidators: true}
+      );
+
+      return res.status(200).json({
+        status: true,
+        message: "Password changed successfully",
+      });
+    } catch (error) { 
+      return res.status(500).json({
+        status: false,
         message: "Internal server error",
         error: error.message || error,
       });

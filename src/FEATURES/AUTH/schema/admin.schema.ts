@@ -29,7 +29,17 @@ const AdminSchema = new Schema(
     website: {type: String},
     extraEmail: {type: String},
     accreditation: {type: String},
-    eventTypes: {type: Array},
+    eventTypes: { type: Array },
+    facebook: {type: String},
+    twitter: {type: String},
+    instagram: {type: String},
+    linkedin: {type: String},
+    youtube: {type: String},
+    tiktok: {type: String},
+    pinterest: { type: String },
+    aboutUs: { type: String },
+    whyStudyWithUs: { type: String },
+    campusLife: { type: String },
 
     permissions: [{type: String, required: true, default: Permission.ALL}],
     status: {

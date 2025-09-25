@@ -42,7 +42,7 @@ Router.delete("/:id",
 });
 
 Router.get("/",
-    //  authentification,
+     authentification,
     (req: Request, res: Response) => {
   DisplayAdvertsController.getAll(req, res);
 });

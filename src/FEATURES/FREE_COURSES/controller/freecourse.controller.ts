@@ -371,20 +371,7 @@ export class FreeCourseController {
       if (assessment) {
         query.assessment = assessment === 'true';
       }
-
-      // Filter out expired start dates unless explicitly requested
-      if (includeExpired !== 'true') {
-        query.$and = [
-          {
-            $or: [
-              { nextStartDate: { $exists: false } },
-              { nextStartDate: null },
-              { nextStartDate: { $gte: new Date() } }
-            ]
-          }
-        ];
-      }
-
+ 
       // Create cache key that includes search and filter parameters
       const cacheKey = `freecourses_public_${page}_${limit}_${search || ''}_${nameOfInstitution || ''}_${discipline || ''}_${language || ''}_${delivery || ''}_${location || ''}_${certificate || ''}_${assessment || ''}_${includeExpired || ''}`;
       

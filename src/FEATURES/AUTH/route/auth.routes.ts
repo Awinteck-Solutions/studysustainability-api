@@ -8,6 +8,7 @@ import { notification } from "../../../middlewares/notification.middleware";
 import { authorization } from "../../../middlewares/authorization.middleware";
 import { Roles } from "../enums/roles.enum";
 import { Permission } from "../enums/permission.enum";
+import { upload } from "../../../helpers/uploader";
 
 
 const Router = express.Router();
@@ -35,10 +36,9 @@ Router.post("/admin/login",
 
 
 
-Router.get("/admin",
+Router.get("/admin/profile",
     authentification,
-     authorization(AdminModel,[Roles.ADMIN],[Permission.ALL]),
-    (req: Request, res: Response) => { 
+    (req: Request, res: Response) => {
         AuthController.profile(req, res)
     }
 );
@@ -61,6 +61,25 @@ Router.post("/admin/reset-password",
         AuthController.resetPassword(req,res)
     }
 );
+
+// UPLOAD PROFILE IMAGE
+Router.post("/admin/upload-profile-image",
+    authentification,
+    upload.single('profileImage'),
+    (req: Request, res: Response) => { 
+        AuthController.uploadProfileImage(req, res)
+    }
+);
+
+// CHANGE PASSWORD
+Router.post("/admin/change-password",
+    authentification,
+    (req: Request, res: Response) => { 
+        AuthController.changePassword(req, res)
+    }
+);
+
+
 
 
 export default Router;
