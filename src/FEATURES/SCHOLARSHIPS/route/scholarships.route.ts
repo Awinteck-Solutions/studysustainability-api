@@ -71,6 +71,14 @@ Router.delete("/permanent/:id",
 
 
 
+Router.get("/statistics",
+    authentification,
+    authorization(AdminModel,[Roles.ADMIN],[Permission.ALL]),
+    (req: Request, res: Response) => {
+        ScholarshipsController.getStats(req, res)
+    }
+);
+
 // public
 Router.get("/public", (req: Request, res: Response) => {
         ScholarshipsController.getAllPublic(req, res)

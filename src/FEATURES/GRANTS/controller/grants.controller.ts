@@ -5,6 +5,8 @@ import mongoose from "mongoose";
 import {Roles} from "../../AUTH/enums/roles.enum";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
 import { uploadFile } from "../../../util/s3";
+import InterestForm from "../../INTERESTFORM/schema/InterestForm.schema";
+import Engagement from "../../Engagement/schema/Engagement.schema";
 
 interface MulterRequest extends Request {
   file?: multer.File;
@@ -161,39 +163,86 @@ export class GrantsController {
   static async getAll(req: Request, res: Response) {
     try {
       const {id, role} = req["currentUser"];
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+
       if (role == Roles.ADMIN) {
-        const key = CACHE_KEYS.GRANTS.ALL;
+        // Create cache key with pagination
+        const cacheKey = `grants_admin_${page}_${limit}`;
         // Check cache first
-        const cachedData = await getCachedData(key);
+        const cachedData = await getCachedData(cacheKey);
         if (cachedData) {
-          console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: cachedData});
+          // console.log("✅ Returning cached data");
+          return res.json(cachedData);
         }
 
-        const models = await GrantsModel.find({
-          status: {$ne: "DELETED"},
-        }).sort({createdAt: -1});
+        const [models, total] = await Promise.all([
+          GrantsModel.find({
+            status: {$ne: "DELETED"},
+          }).sort({createdAt: -1}).skip(skip).limit(limit),
+          GrantsModel.countDocuments({status: {$ne: "DELETED"}})
+        ]);
+
+        const totalPages = Math.ceil(total / limit);
+
+        const responsePayload = {
+          message: "Data found",
+          metadata: {
+            total,
+            page,
+            limit,
+            totalPages,
+            filters: {
+              status: "ACTIVE,INACTIVE,REJECTED"
+            }
+          },
+          response: models,
+        };
 
         // Cache the result
-        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
-        res.status(200).json({message: "Data found", response: models});
+        await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+        res.status(200).json(responsePayload);
       } else {
-        const key = getUserCacheKey(CACHE_KEYS.GRANTS.ALL, id);
+        // Create cache key with pagination for user-specific data
+        const cacheKey = `grants_user_${id}_${page}_${limit}`;
         // Check cache first
-        const cachedData = await getCachedData(key);
+        const cachedData = await getCachedData(cacheKey);
         if (cachedData) {
-          console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: cachedData});
+          // console.log("✅ Returning cached data");
+          return res.json(cachedData);
         }
         
-        const models = await GrantsModel.find({
-          author: new mongoose.Types.ObjectId(id),
-          status: {$ne: "DELETED"},
-        }).sort({createdAt: -1});
+        const [models, total] = await Promise.all([
+          GrantsModel.find({
+            author: new mongoose.Types.ObjectId(id),
+            status: {$ne: "DELETED"},
+          }).sort({createdAt: -1}).skip(skip).limit(limit),
+          GrantsModel.countDocuments({
+            author: new mongoose.Types.ObjectId(id),
+            status: {$ne: "DELETED"}
+          })
+        ]);
+
+        const totalPages = Math.ceil(total / limit);
+
+        const responsePayload = {
+          message: "Data found",
+          metadata: {
+            total,
+            page,
+            limit,
+            totalPages,
+            filters: {
+              status: "ACTIVE,INACTIVE,REJECTED"
+            }
+          },
+          response: models,
+        };
 
          // Cache the result
-         await setCachedData(key, models, CACHE_DURATION.MEDIUM);
-        res.status(200).json({message: "Data found", response: models});
+         await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+        res.status(200).json(responsePayload);
       }
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -317,6 +366,84 @@ export class GrantsController {
     } catch (error) {
       console.log('error :>> ', error);
       res.status(400).json({error: error.message});
+    }
+  }
+
+  // GET GRANTS STATISTICS
+  static async getStats(req: Request, res: Response) {
+    try {
+      const { role } = req["currentUser"];
+      
+      // Only allow ADMIN role to access statistics
+      if (role !== Roles.ADMIN) {
+        return res.status(403).json({
+          status: false,
+          message: "Access denied. Admin privileges required.",
+        });
+      }
+
+      const cacheKey = 'grants_stats';
+      
+      // Check cache first
+      const cachedData = await getCachedData(cacheKey);
+      if (cachedData) {
+        return res.json(cachedData);
+      }
+
+      // Get statistics
+      const [
+        totalGrants,
+        activeGrants,
+        inactiveGrants,
+        recentGrants,
+        totalEnrolled,
+        totalEngagements
+      ] = await Promise.all([
+        GrantsModel.countDocuments({  status: { $ne: "DELETED" }}),
+        GrantsModel.countDocuments({ status: "ACTIVE" }),
+        GrantsModel.countDocuments({ status: "INACTIVE" }),
+        GrantsModel.countDocuments({ 
+          createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+          status: { $ne: "DELETED" }
+        }),
+        InterestForm.countDocuments({ status: "ACTIVE", menu: 'Grants' }),
+        Engagement.countDocuments({ itemType: 'GRANTS' })
+      ]);
+
+      const stats = {
+        totalGrants,
+        activeGrants,
+        inactiveGrants,
+        recentGrants, // Grants created in last 7 days
+        statusBreakdown: {
+          active: activeGrants,
+          inactive: inactiveGrants
+        },
+        // Additional platform statistics
+        totalEnrolled, // Total active interest form submissions for grants
+        totalEngagements // Total engagement records for grants
+      };
+
+      const responsePayload = {
+        status: true,
+        message: "Grants statistics retrieved successfully",
+        response: stats,
+        metadata: {
+          generatedAt: new Date().toISOString(),
+          generatedBy: req["currentUser"].id
+        }
+      };
+
+      // Cache the result for 30 minutes
+      await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+      
+      return res.status(200).json(responsePayload);
+    } catch (error) {
+      console.log("error :>> ", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
     }
   }
   

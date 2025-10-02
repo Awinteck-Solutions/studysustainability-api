@@ -1,6 +1,7 @@
 // schema/OpenDays.schema.ts
 
 import mongoose from "mongoose";
+import { status } from "../../AUTH/enums/status.enum";
 const Schema = mongoose.Schema;
 
 const OpenDaysSchema = new Schema(
@@ -13,11 +14,7 @@ const OpenDaysSchema = new Schema(
     mode: { type: String, required: false },
     link: { type: String, required: false },
     date: { type: Date, required: false },
-    status: {
-      type: String,
-      enum: ["PENDING", "ACTIVE", "DEACTIVE", "DELETED"],
-      default: "PENDING",
-    },
+    status: {type: String, enum: status, default: status.INACTIVE},
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   },
   { timestamps: true }

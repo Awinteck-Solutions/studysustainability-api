@@ -27,6 +27,11 @@ import subscriberRoutes from '../FEATURES/SUBSCRIBER/route/subscriber.route';
 import advertiseRoutes from '../FEATURES/ADVERTISE/route/advertise.route';
 import advertiseWithUsRoutes from '../FEATURES/ADVERTISE_WITH_US/route/advertiseWithUs.route';
 import websiteFeedbackRoutes from '../FEATURES/WEBSITE_FEEDBACK/route/websiteFeedback.route';
+import userManagementRoutes from '../FEATURES/USER_MANAGEMENT/route/userManagement.route';
+import analyticsRoutes from '../FEATURES/ANALYTICS/route/analytics.route';
+import financeRoutes from '../FEATURES/FINANCE/route/finance.route';
+import emailerRoutes from '../FEATURES/EMAILER/route/emailer.route';
+import dashboardRoutes from '../FEATURES/DASHBOARD/route/dashboard.route';
 const Router = express.Router();
 
 Router.use("/auth", authRoutes);
@@ -61,6 +66,11 @@ Router.use("/subscribers", subscriberRoutes);
 Router.use("/advertise", advertiseRoutes);
 Router.use("/advertise-with-us", advertiseWithUsRoutes);
 Router.use("/website-feedback", websiteFeedbackRoutes);
+Router.use("/user-management", userManagementRoutes);
+Router.use("/analytics", analyticsRoutes);
+Router.use("/finance", financeRoutes);
+Router.use("/emailer", emailerRoutes);
+Router.use("/dashboard", dashboardRoutes);
 
 
 export { Router }

@@ -118,6 +118,7 @@ export class UniProgramsController {
 
       // Invalidate cache after creating new program
       await invalidateCache('UNI_PROGRAMS');
+      await invalidateCache('ANALYTICS');
       // Also invalidate public cache patterns
       await invalidatePublicCache();
 
@@ -158,6 +159,7 @@ export class UniProgramsController {
         careerPaths,
         registerInterest,
         applyLink,
+        status,
       } = req.body;
 
       // Find the existing document by ID (passed in the route params)
@@ -207,6 +209,7 @@ export class UniProgramsController {
       existingModel.registerInterest =
         registerInterest || existingModel.registerInterest;
       existingModel.applyLink = applyLink || existingModel.applyLink;
+      existingModel.status = status || existingModel.status;
       // If an image is uploaded, store its path
       if (req.file) {
         // existingModel.image =
@@ -222,6 +225,7 @@ export class UniProgramsController {
 
       // Invalidate cache after updating program
       await invalidateCache('UNI_PROGRAMS', req.params.id);
+      await invalidateCache('ANALYTICS');
       // Also invalidate public cache patterns
       await invalidatePublicCache();
 
@@ -294,37 +298,84 @@ export class UniProgramsController {
   static async getAll(req: Request, res: Response) {
     try {
       const {id, role} = req["currentUser"];
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+
       if (role == Roles.ADMIN) {
-        const key = CACHE_KEYS.UNI_PROGRAMS.ALL;
+        // Create cache key with pagination
+        const cacheKey = `uniprograms_admin_${page}_${limit}`;
         // Check cache first
-        const cachedData = await getCachedData(key);
+        const cachedData = await getCachedData(cacheKey);
         if (cachedData) {
-          return res.json({message: "Data found", response: cachedData});
+          return res.json(cachedData);
         }
 
-        const models = await UniProgramModel.find({
-          status: {$ne: "DELETED"},
-        }).sort({createdAt: -1});
+        const [models, total] = await Promise.all([
+          UniProgramModel.find({
+            status: {$ne: "DELETED"},
+          }).sort({createdAt: -1}).skip(skip).limit(limit),
+          UniProgramModel.countDocuments({status: {$ne: "DELETED"}})
+        ]);
+
+        const totalPages = Math.ceil(total / limit);
+
+        const responsePayload = {
+          message: "Program found",
+          metadata: {
+            total,
+            page,
+            limit,
+            totalPages,
+            filters: {
+              status: "ACTIVE,INACTIVE,REJECTED"
+            }
+          },
+          response: models,
+        };
 
         // Cache the result for 1 hour
-        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
-        res.status(200).json({message: "Program found", response: models});
+        await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+        res.status(200).json(responsePayload);
       } else {
-        const key = getUserCacheKey(CACHE_KEYS.UNI_PROGRAMS.ALL, id);
+        // Create cache key with pagination for user-specific data
+        const cacheKey = `uniprograms_user_${id}_${page}_${limit}`;
         // Check cache first
-        const cachedData = await getCachedData(key);
+        const cachedData = await getCachedData(cacheKey);
         if (cachedData) {
-          return res.json({message: "Data found", response: cachedData});
+          return res.json(cachedData);
         }
 
-        const models = await UniProgramModel.find({
-          author: new mongoose.Types.ObjectId(id),
-          status: {$ne: "DELETED"},
-        }).sort({createdAt: -1});
+        const [models, total] = await Promise.all([
+          UniProgramModel.find({
+            author: new mongoose.Types.ObjectId(id),
+            status: {$ne: "DELETED"},
+          }).sort({createdAt: -1}).skip(skip).limit(limit),
+          UniProgramModel.countDocuments({
+            author: new mongoose.Types.ObjectId(id),
+            status: {$ne: "DELETED"}
+          })
+        ]);
+
+        const totalPages = Math.ceil(total / limit);
+
+        const responsePayload = {
+          message: "Program found",
+          metadata: {
+            total,
+            page,
+            limit,
+            totalPages,
+            filters: {
+              status: "ACTIVE,INACTIVE,REJECTED"
+            }
+          },
+          response: models,
+        };
 
         // Cache the result for 1 hour
-        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
-        res.status(200).json({message: "Program found", response: models});
+        await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+        res.status(200).json(responsePayload);
       }
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -381,7 +432,8 @@ export class UniProgramsController {
       }
 
       // Invalidate cache after soft deletion
-      await invalidateCache('UNI_PROGRAMS', req.params.id);
+      invalidateCache('UNI_PROGRAMS', req.params.id);
+      await invalidateCache('ANALYTICS');
       // Also invalidate public cache patterns
       await invalidatePublicCache();
 
@@ -690,6 +742,156 @@ export class UniProgramsController {
       return res.status(500).json({
         success: false,
         message: "System error",
+      });
+    }
+  }
+
+  static async updateStatus(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      if (!status) {
+        return res.status(400).json({
+          success: false,
+          message: "Status is required",
+        });
+      }
+
+      const validStatuses = ["ACTIVE", "INACTIVE", "REJECTED", "DELETED"];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid status. Must be one of: ACTIVE, INACTIVE, REJECTED, DELETED",
+        });
+      }
+
+      const uniProgram = await UniProgramModel.findByIdAndUpdate(
+        id,
+        { status },
+        { new: true }
+      );
+
+      if (!uniProgram) {
+        return res.status(404).json({
+          success: false,
+          message: "University Program not found",
+        });
+      }
+
+      // Invalidate analytics cache
+      await invalidateCache('ANALYTICS');
+      // invalidate cache for the university program
+      invalidateCache('UNI_PROGRAMS', id);
+
+      return res.status(200).json({
+        success: true,
+        message: "University Program status updated successfully",
+        response: uniProgram,
+      });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({
+        success: false,
+        message: "System error",
+      });
+    }
+  }
+
+  // GET UNIVERSITY PROGRAMS STATISTICS
+  static async getStats(req: Request, res: Response) {
+    try {
+      const { role } = req["currentUser"];
+      
+      // Only allow ADMIN role to access statistics
+      if (role !== Roles.ADMIN) {
+        return res.status(403).json({
+          status: false,
+          message: "Access denied. Admin privileges required.",
+        });
+      }
+
+      const cacheKey = 'uniprograms_stats';
+      
+      // Check cache first
+      const cachedData = await getCachedData(cacheKey);
+      if (cachedData) {
+        return res.json(cachedData);
+      }
+
+      // Get statistics
+      const [
+        totalPrograms,
+        activePrograms,
+        inactivePrograms,
+        disciplineStats,
+        institutionStats,
+        recentPrograms,
+        totalEnrolled,
+        totalEngagements
+      ] = await Promise.all([
+        UniProgramModel.countDocuments({  status: { $ne: "DELETED" }}),
+        UniProgramModel.countDocuments({ status: "ACTIVE" }),
+        UniProgramModel.countDocuments({ status: "INACTIVE" }),
+        UniProgramModel.aggregate([
+          { $match: { status: { $ne: "DELETED" } } },
+          { $group: { _id: "$discipline", count: { $sum: 1 } } },
+          { $sort: { count: -1 } }
+        ]),
+        UniProgramModel.aggregate([
+          { $match: { status: { $ne: "DELETED" } } },
+          { $group: { _id: "$nameOfInstitution", count: { $sum: 1 } } },
+          { $sort: { count: -1 } }
+        ]),
+        UniProgramModel.countDocuments({ 
+          createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+          status: { $ne: "DELETED" }
+        }),
+        InterestForm.countDocuments({ status: "ACTIVE", menu: 'UniversityPrograms' }),
+        Engagement.countDocuments({ itemType: 'UNIVERSITY_PROGRAM' })
+      ]);
+
+      const stats = {
+        totalPrograms,
+        activePrograms,
+        inactivePrograms,
+        disciplineBreakdown: disciplineStats.map(stat => ({
+          discipline: stat._id,
+          count: stat.count
+        })),
+        institutionBreakdown: institutionStats.map(stat => ({
+          institution: stat._id,
+          count: stat.count
+        })),
+        recentPrograms, // Programs created in last 7 days
+        statusBreakdown: {
+          active: activePrograms,
+          inactive: inactivePrograms
+        },
+        // Additional platform statistics
+        totalEnrolled, // Total active interest form submissions for university programs
+        totalEngagements // Total engagement records for university programs
+      };
+
+      const responsePayload = {
+        status: true,
+        message: "University Programs statistics retrieved successfully",
+        response: stats,
+        metadata: {
+          generatedAt: new Date().toISOString(),
+          generatedBy: req["currentUser"].id
+        }
+      };
+
+      // Cache the result for 30 minutes
+      await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+      
+      return res.status(200).json(responsePayload);
+    } catch (error) {
+      console.log("error :>> ", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
       });
     }
   }

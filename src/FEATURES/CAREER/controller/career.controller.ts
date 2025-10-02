@@ -5,6 +5,8 @@ import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
 import { uploadFile } from "../../../util/s3";
+import InterestForm from "../../INTERESTFORM/schema/InterestForm.schema";
+import Engagement from "../../Engagement/schema/Engagement.schema";
 
 interface MulterRequest extends Request {
   file?: multer.File;
@@ -51,7 +53,7 @@ export class CareerController {
       await newCareer.save();
 
       // Invalidate cache after creating new career
-      await invalidateCache('CAREERS');
+      await invalidateCache('CAREER');
 
       res.status(201).json({
         message: "Career model created successfully",
@@ -97,7 +99,7 @@ export class CareerController {
       const updatedCareer = await existingCareer.save();
       
       // Invalidate cache after updating career
-      await invalidateCache('CAREERS', req.params.id);
+      await invalidateCache('CAREER', req.params.id);
       res
         .status(200)
         .json({message: "Career model updated", response: updatedCareer});
@@ -126,7 +128,7 @@ export class CareerController {
         await career.save(); // Save the updated model
         
         // Invalidate cache after updating image
-        await invalidateCache('CAREERS', req.params.id);
+        await invalidateCache('CAREER', req.params.id);
         
         res.status(201).json({
           message: "Career image updated successfully",
@@ -167,40 +169,88 @@ export class CareerController {
   static async getAll(req: Request, res: Response) {
     try {
       const {id, role} = req["currentUser"];
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+
       if (role == Roles.ADMIN) {
-        const key = CACHE_KEYS.CAREERS.ALL;
+        // Create cache key with pagination
+        const cacheKey = `careers_admin_${page}_${limit}`;
 
         // Check cache first
-        const cachedData = await getCachedData(key);
+        const cachedData = await getCachedData(cacheKey);
         if (cachedData) {
-          return res.json({message: "Data found", response: cachedData});
+          return res.json(cachedData);
         }
 
-        const models = await CareerModel.find({
-          status: {$ne: "DELETED"},
-        }).sort({createdAt: -1});
+        const [models, total] = await Promise.all([
+          CareerModel.find({
+            status: {$ne: "DELETED"},
+          }).sort({createdAt: -1}).skip(skip).limit(limit),
+          CareerModel.countDocuments({status: {$ne: "DELETED"}})
+        ]);
+
+        const totalPages = Math.ceil(total / limit);
+
+        const responsePayload = {
+          message: "Data found",
+          metadata: {
+            total,
+            page,
+            limit,
+            totalPages,
+            filters: {
+              status: "ACTIVE,INACTIVE,REJECTED"
+            }
+          },
+          response: models,
+        };
 
         // Cache the result for 1 hour
-        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
+        await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
 
-        res.status(200).json({message: "Data found", response: models});
+        res.status(200).json(responsePayload);
       } else {
-        const key = getUserCacheKey(CACHE_KEYS.CAREERS.ALL, id);
+        // Create cache key with pagination for user-specific data
+        const cacheKey = `careers_user_${id}_${page}_${limit}`;
 
         // Check cache first
-        const cachedData = await getCachedData(key);
+        const cachedData = await getCachedData(cacheKey);
         if (cachedData) {
-          return res.json({message: "Data found", response: cachedData});
+          return res.json(cachedData);
         }
 
-        const models = await CareerModel.find({
-          author: new mongoose.Types.ObjectId(id),
-          status: {$ne: "DELETED"},
-        }).sort({createdAt: -1});
-        // Cache the result for 1 hour
-        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
+        const [models, total] = await Promise.all([
+          CareerModel.find({
+            author: new mongoose.Types.ObjectId(id),
+            status: {$ne: "DELETED"},
+          }).sort({createdAt: -1}).skip(skip).limit(limit),
+          CareerModel.countDocuments({
+            author: new mongoose.Types.ObjectId(id),
+            status: {$ne: "DELETED"}
+          })
+        ]);
 
-        res.status(200).json({message: "Data found", response: models});
+        const totalPages = Math.ceil(total / limit);
+
+        const responsePayload = {
+          message: "Data found",
+          metadata: {
+            total,
+            page,
+            limit,
+            totalPages,
+            filters: {
+              status: "ACTIVE,INACTIVE,REJECTED"
+            }
+          },
+          response: models,
+        };
+
+        // Cache the result for 1 hour
+        await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+
+        res.status(200).json(responsePayload);
       }
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -221,7 +271,7 @@ export class CareerController {
       }
 
       // Invalidate cache after soft deletion
-      await invalidateCache('CAREERS', req.params.id);
+      await invalidateCache('CAREER', req.params.id);
 
       res
         .status(200)
@@ -241,7 +291,7 @@ export class CareerController {
       }
 
       // Invalidate cache after permanent deletion
-      await invalidateCache('CAREERS', req.params.id);
+      await invalidateCache('CAREER', req.params.id);
 
       res.status(200).json({message: "Career model successfully deleted"});
     } catch (error) {
@@ -327,6 +377,108 @@ export class CareerController {
     } catch (error) {
       console.log('error :>> ', error);
       res.status(400).json({error: error.message});
+    }
+  }
+
+  // GET CAREER STATISTICS
+  static async getStats(req: Request, res: Response) {
+    try {
+      const { role } = req["currentUser"];
+      
+      // Only allow ADMIN role to access statistics
+      if (role !== Roles.ADMIN) {
+        return res.status(403).json({
+          status: false,
+          message: "Access denied. Admin privileges required.",
+        });
+      }
+
+      const cacheKey = 'career_stats';
+      
+      // Check cache first
+      const cachedData = await getCachedData(cacheKey);
+      if (cachedData) {
+        return res.json(cachedData);
+      }
+
+      // Get statistics
+      const [
+        totalCareers,
+        activeCareers,
+        inactiveCareers,
+        deletedCareers,
+        industryStats,
+        roleLevelStats,
+        recentCareers,
+        totalEnrolled,
+        totalEngagements
+      ] = await Promise.all([
+        CareerModel.countDocuments({  status: { $ne: "DELETED" }}),
+        CareerModel.countDocuments({ status: "ACTIVE" }),
+        CareerModel.countDocuments({ status: "INACTIVE" }),
+        CareerModel.countDocuments({ status: "DELETED" }),
+        CareerModel.aggregate([
+          { $match: { status: { $ne: "DELETED" } } },
+          { $group: { _id: "$industry", count: { $sum: 1 } } },
+          { $sort: { count: -1 } }
+        ]),
+        CareerModel.aggregate([
+          { $match: { status: { $ne: "DELETED" } } },
+          { $group: { _id: "$roleLevel", count: { $sum: 1 } } },
+          { $sort: { count: -1 } }
+        ]),
+        CareerModel.countDocuments({ 
+          createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+          status: { $ne: "DELETED" }
+        }),
+        InterestForm.countDocuments({ status: "ACTIVE", menu: 'Careers' }),
+        Engagement.countDocuments({ itemType: 'CAREERS' })
+      ]);
+
+      const stats = {
+        totalCareers,
+        activeCareers,
+        inactiveCareers,
+        deletedCareers,
+        industryBreakdown: industryStats.map(stat => ({
+          industry: stat._id,
+          count: stat.count
+        })),
+        roleLevelBreakdown: roleLevelStats.map(stat => ({
+          roleLevel: stat._id,
+          count: stat.count
+        })),
+        recentCareers, // Careers created in last 7 days
+        statusBreakdown: {
+          active: activeCareers,
+          inactive: inactiveCareers,
+          deleted: deletedCareers
+        },
+        // Additional platform statistics
+        totalEnrolled, // Total active interest form submissions for careers
+        totalEngagements // Total engagement records for careers
+      };
+
+      const responsePayload = {
+        status: true,
+        message: "Career statistics retrieved successfully",
+        response: stats,
+        metadata: {
+          generatedAt: new Date().toISOString(),
+          generatedBy: req["currentUser"].id
+        }
+      };
+
+      // Cache the result for 30 minutes
+      await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+      
+      return res.status(200).json(responsePayload);
+    } catch (error) {
+      console.log("error :>> ", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
     }
   }
   

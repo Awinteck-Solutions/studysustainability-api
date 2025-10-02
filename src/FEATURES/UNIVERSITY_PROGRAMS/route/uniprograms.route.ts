@@ -43,6 +43,14 @@ Router.patch("/image/:id",
     }
 );
 
+Router.patch("/status/:id",
+    authentification,
+    authorization(AdminModel,[Roles.ADMIN, Roles.USER, Roles.UNIVERSITY],[Permission.ALL,Permission.UNIVERSITY_PROGRAMS]),
+    (req: Request, res: Response) => {
+        UniProgramsController.updateStatus(req, res)
+    }
+);
+
 
 
 
@@ -91,6 +99,14 @@ Router.get(
     authentification,
     (req: Request, res: Response) => {
         UniProgramsController.getUniversityDashboardMetrics(req, res)
+    }
+);
+
+Router.get("/statistics",
+    authentification,
+    authorization(AdminModel,[Roles.ADMIN],[Permission.ALL]),
+    (req: Request, res: Response) => {
+        UniProgramsController.getStats(req, res)
     }
 );
 

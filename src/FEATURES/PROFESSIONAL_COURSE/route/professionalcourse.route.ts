@@ -43,6 +43,14 @@ Router.patch("/image/:id",
     }
 );
 
+Router.patch("/status/:id",
+    authentification,
+    authorization(AdminModel,[Roles.ADMIN, Roles.USER, Roles.PROFESSIONALS],[Permission.ALL,Permission.PROFESSIONAL_COURSE]),
+    (req: Request, res: Response) => {
+        ProfessionalCourseController.updateStatus(req, res)
+    }
+);
+
 Router.get("/",
     authentification,
     authorization(AdminModel,[Roles.ADMIN, Roles.USER, Roles.PROFESSIONALS],[Permission.ALL,Permission.PROFESSIONAL_COURSE]),
@@ -78,6 +86,14 @@ Router.get(
     authorization(AdminModel,[Roles.ADMIN, Roles.USER, Roles.PROFESSIONALS],[Permission.ALL,Permission.PROFESSIONAL_COURSE]),
     (req: Request, res: Response) => {
         ProfessionalCourseController.getProfessionalDashboardMetrics(req, res)
+    }
+);
+
+Router.get("/statistics",
+    authentification,
+    authorization(AdminModel,[Roles.ADMIN],[Permission.ALL]),
+    (req: Request, res: Response) => {
+        ProfessionalCourseController.getStats(req, res)
     }
 );
 

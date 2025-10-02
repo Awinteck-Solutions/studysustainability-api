@@ -79,6 +79,7 @@ export class ProfessionalCourseController {
 
       // Invalidate cache after creating new course
       await invalidateCache('PROFESSIONAL_COURSES');
+      await invalidateCache('ANALYTICS');
 
       res
         .status(201)
@@ -115,6 +116,7 @@ export class ProfessionalCourseController {
         registerInterestForm,
         applyLink,
         language,
+        status,
       } = req.body;
 
       // Find the existing course by ID
@@ -156,6 +158,7 @@ export class ProfessionalCourseController {
         registerInterestForm || existingCourse.registerInterestForm;
       existingCourse.applyLink = applyLink || existingCourse.applyLink;
       existingCourse.language = language || existingCourse.language;
+      existingCourse.status = status || existingCourse.status;
       if (req.file) {
         // existingCourse.image =
         //   `${req.file.fieldname}${req.file.filename}` || existingCourse.image;
@@ -169,6 +172,7 @@ export class ProfessionalCourseController {
       
       // Invalidate cache after updating course
       await invalidateCache(req.params.id);
+      await invalidateCache('ANALYTICS');
       res
         .status(200)
         .json({
@@ -243,39 +247,86 @@ export class ProfessionalCourseController {
   static async getAll(req: Request, res: Response) {
     try {
       const {id, role} = req["currentUser"];
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+
       if (role == Roles.ADMIN) {
-        const key = CACHE_KEYS.PROFESSIONAL_COURSES.ALL;
+        // Create cache key with pagination
+        const cacheKey = `professionalcourses_admin_${page}_${limit}`;
         // Check cache first
-        const cachedData = await getCachedData(key);
+        const cachedData = await getCachedData(cacheKey);
         if (cachedData) {
-          console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: cachedData});
+          // console.log("✅ Returning cached data");
+          return res.json(cachedData);
         }
 
-        const models = await ProfessionalCourseModel.find({
-          status: {$ne: "DELETED"},
-        }).sort({createdAt: -1});
+        const [models, total] = await Promise.all([
+          ProfessionalCourseModel.find({
+            status: {$ne: "DELETED"},
+          }).sort({createdAt: -1}).skip(skip).limit(limit),
+          ProfessionalCourseModel.countDocuments({status: {$ne: "DELETED"}})
+        ]);
+
+        const totalPages = Math.ceil(total / limit);
+
+        const responsePayload = {
+          message: "Data found",
+          metadata: {
+            total,
+            page,
+            limit,
+            totalPages,
+            filters: {
+              status: "ACTIVE,INACTIVE,REJECTED"
+            }
+          },
+          response: models,
+        };
 
         // Cache the result
-        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
-        res.status(200).json({message: "Data found", response: models});
+        await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+        res.status(200).json(responsePayload);
       } else {
-        const key = getUserCacheKey(CACHE_KEYS.PROFESSIONAL_COURSES.ALL, id);
+        // Create cache key with pagination for user-specific data
+        const cacheKey = `professionalcourses_user_${id}_${page}_${limit}`;
         // Check cache first
-        const cachedData = await getCachedData(key);
+        const cachedData = await getCachedData(cacheKey);
         if (cachedData) {
-          console.log("✅ Returning cached data");
-          return res.json({message: "Data found", response: cachedData});
+          // console.log("✅ Returning cached data");
+          return res.json(cachedData);
         }
 
-        const models = await ProfessionalCourseModel.find({
-          author: new mongoose.Types.ObjectId(id),
-          status: {$ne: "DELETED"},
-        }).sort({createdAt: -1});
+        const [models, total] = await Promise.all([
+          ProfessionalCourseModel.find({
+            author: new mongoose.Types.ObjectId(id),
+            status: {$ne: "DELETED"},
+          }).sort({createdAt: -1}).skip(skip).limit(limit),
+          ProfessionalCourseModel.countDocuments({
+            author: new mongoose.Types.ObjectId(id),
+            status: {$ne: "DELETED"}
+          })
+        ]);
+
+        const totalPages = Math.ceil(total / limit);
+
+        const responsePayload = {
+          message: "Data found",
+          metadata: {
+            total,
+            page,
+            limit,
+            totalPages,
+            filters: {
+              status: "ACTIVE,INACTIVE,REJECTED"
+            }
+          },
+          response: models,
+        };
 
         // Cache the result
-        await setCachedData(key, models, CACHE_DURATION.MEDIUM);
-        res.status(200).json({message: "Data found", response: models});
+        await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+        res.status(200).json(responsePayload);
       }
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -296,7 +347,8 @@ export class ProfessionalCourseController {
       }
 
       // Invalidate cache after soft deletion
-      await invalidateCache('PROFESSIONAL_COURSES', req.params.id);
+       invalidateCache('PROFESSIONAL_COURSES', req.params.id);
+      await invalidateCache('ANALYTICS');
       res
         .status(200)
         .json({message: "Course status updated to DELETED", response: course});
@@ -533,6 +585,156 @@ export class ProfessionalCourseController {
       return res.status(500).json({
         success: false,
         message: "System error",
+      });
+    }
+  }
+
+  static async updateStatus(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      if (!status) {
+        return res.status(400).json({
+          success: false,
+          message: "Status is required",
+        });
+      }
+
+      const validStatuses = ["ACTIVE", "INACTIVE", "REJECTED", "DELETED"];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid status. Must be one of: ACTIVE, INACTIVE, REJECTED, DELETED",
+        });
+      }
+
+      const professionalCourse = await ProfessionalCourseModel.findByIdAndUpdate(
+        id,
+        { status },
+        { new: true }
+      );
+
+      if (!professionalCourse) {
+        return res.status(404).json({
+          success: false,
+          message: "Professional Course not found",
+        });
+      }
+
+      // Invalidate analytics cache
+      await invalidateCache('ANALYTICS');
+      // invalidate cache for the professional course
+      invalidateCache('PROFESSIONAL_COURSES', id);
+
+      return res.status(200).json({
+        success: true,
+        message: "Professional Course status updated successfully",
+        response: professionalCourse,
+      });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({
+        success: false,
+        message: "System error",
+      });
+    }
+  }
+
+  // GET PROFESSIONAL COURSES STATISTICS
+  static async getStats(req: Request, res: Response) {
+    try {
+      const { role } = req["currentUser"];
+      
+      // Only allow ADMIN role to access statistics
+      if (role !== Roles.ADMIN) {
+        return res.status(403).json({
+          status: false,
+          message: "Access denied. Admin privileges required.",
+        });
+      }
+
+      const cacheKey = 'professionalcourses_stats';
+      
+      // Check cache first
+      const cachedData = await getCachedData(cacheKey);
+      if (cachedData) {
+        return res.json(cachedData);
+      }
+
+      // Get statistics
+      const [
+        totalCourses,
+        activeCourses,
+        inactiveCourses,
+        providerStats,
+        industryStats,
+        recentCourses,
+        totalEnrolled,
+        totalEngagements
+      ] = await Promise.all([
+        ProfessionalCourseModel.countDocuments({  status: { $ne: "DELETED" }}),
+        ProfessionalCourseModel.countDocuments({ status: "ACTIVE" }),
+        ProfessionalCourseModel.countDocuments({ status: "INACTIVE" }),
+        ProfessionalCourseModel.aggregate([
+          { $match: { status: { $ne: "DELETED" } } },
+          { $group: { _id: "$nameOfProvider", count: { $sum: 1 } } },
+          { $sort: { count: -1 } }
+        ]),
+        ProfessionalCourseModel.aggregate([
+          { $match: { status: { $ne: "DELETED" } } },
+          { $group: { _id: "$industry", count: { $sum: 1 } } },
+          { $sort: { count: -1 } }
+        ]),
+        ProfessionalCourseModel.countDocuments({ 
+          createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+          status: { $ne: "DELETED" }
+        }),
+        InterestForm.countDocuments({ status: "ACTIVE", menu: 'ProfessionalCourses' }),
+        Engagement.countDocuments({ itemType: 'PROFESSIONAL_PROGRAM' })
+      ]);
+
+      const stats = {
+        totalCourses,
+        activeCourses,
+        inactiveCourses,
+        providerBreakdown: providerStats.map(stat => ({
+          provider: stat._id,
+          count: stat.count
+        })),
+        industryBreakdown: industryStats.map(stat => ({
+          industry: stat._id,
+          count: stat.count
+        })),
+        recentCourses, // Courses created in last 7 days
+        statusBreakdown: {
+          active: activeCourses,
+          inactive: inactiveCourses
+        },
+        // Additional platform statistics
+        totalEnrolled, // Total active interest form submissions for professional courses
+        totalEngagements // Total engagement records for professional courses
+      };
+
+      const responsePayload = {
+        status: true,
+        message: "Professional Courses statistics retrieved successfully",
+        response: stats,
+        metadata: {
+          generatedAt: new Date().toISOString(),
+          generatedBy: req["currentUser"].id
+        }
+      };
+
+      // Cache the result for 30 minutes
+      await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+      
+      return res.status(200).json(responsePayload);
+    } catch (error) {
+      console.log("error :>> ", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
       });
     }
   }

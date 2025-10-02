@@ -34,7 +34,6 @@ export class AdvertiseController {
   static async create(req: MulterRequest, res: Response) {
     try {
       const { id } = req["currentUser"];
-      console.log("currentUser id advertise :>> ", id);
       
       const {
         title,
@@ -83,8 +82,6 @@ export class AdvertiseController {
           }
         }
       }
-
-      console.log("model :>> ", model);
       const newModel = new AdvertiseModel(model);
       await newModel.save();
 

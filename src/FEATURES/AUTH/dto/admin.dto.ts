@@ -37,13 +37,16 @@ export class AdminDto {
   @Expose() aboutUs;
   @Expose() whyStudyWithUs;
   @Expose() campusLife;
+  @Expose() id;
   
 
 }
 
 export const formatAdminResponse = (user, token) => {
   // console.log('user :>> ', user);
-  let admin = token?{ ...user.toObject(), token } : user.toObject()
+  // Handle both Mongoose documents and plain objects
+  const userObj = user.toObject ? user.toObject() : user;
+  let admin = token ? { ...userObj, token } : userObj;
   return plainToInstance(AdminDto, admin, { excludeExtraneousValues: true });
 };
 

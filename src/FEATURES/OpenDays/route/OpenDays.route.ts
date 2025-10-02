@@ -29,6 +29,14 @@ Router.patch(
   }
 );
 
+Router.patch(
+  "/status/:id",
+  authentification,
+  (req: Request, res: Response) => {
+    OpenDaysController.updateStatus(req, res);
+  }
+);
+
 Router.delete(
   "/:id",
   authentification,
@@ -42,6 +50,14 @@ Router.get(
   authentification,
   (req: Request, res: Response) => {
     OpenDaysController.getAll(req, res);
+  }
+);
+
+Router.get(
+  "/admin",
+  authentification,
+  (req: Request, res: Response) => {
+    OpenDaysController.getAllAdmin(req, res);
   }
 );
 

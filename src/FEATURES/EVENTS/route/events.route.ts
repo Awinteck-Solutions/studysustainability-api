@@ -43,6 +43,14 @@ Router.patch("/image/:id",
     }
 );
 
+Router.patch("/status/:id",
+    authentification,
+    authorization(AdminModel,[Roles.ADMIN, Roles.EVENT_ORGANIZER, Roles.USER],[Permission.ALL,Permission.EVENTS]),
+    (req: Request, res: Response) => {
+        EventsController.updateStatus(req, res)
+    }
+);
+
 
 
 
@@ -51,6 +59,14 @@ Router.get("/",
     authorization(AdminModel,[Roles.ADMIN, Roles.EVENT_ORGANIZER, Roles.USER],[Permission.ALL,Permission.EVENTS]),
     (req: Request, res: Response) => {
         EventsController.getAll(req, res)
+    }
+);
+
+Router.get("/statistics",
+    authentification,
+    authorization(AdminModel,[Roles.ADMIN],[Permission.ALL]),
+    (req: Request, res: Response) => {
+        EventsController.getStats(req, res)
     }
 );
 

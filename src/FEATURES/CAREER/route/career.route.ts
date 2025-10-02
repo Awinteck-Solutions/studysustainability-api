@@ -53,6 +53,14 @@ Router.get("/",
     }
 );
 
+Router.get("/statistics",
+    authentification,
+    authorization(AdminModel,[Roles.ADMIN],[Permission.ALL]),
+    (req: Request, res: Response) => {
+        CareerController.getStats(req, res)
+    }
+);
+
 
 
 Router.delete("/temporal/:id",

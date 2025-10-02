@@ -95,6 +95,41 @@ export const CACHE_KEYS = {
   WEBSITE_FEEDBACK: {
     ALL: '/website-feedback/',
     BY_ID: (id: string) => `/website-feedback/${id}`
+  },
+  
+  // Analytics
+  ANALYTICS: {
+    ALL: '/analytics/',
+    BY_ID: (id: string) => `/analytics/${id}`,
+    COMPREHENSIVE: '/analytics/comprehensive'
+  },
+  
+  // Finance
+  FINANCE: {
+    ALL: '/finance/',
+    BY_ID: (id: string) => `/finance/${id}`,
+    PAYMENT_LINK: (id: string) => `/finance/${id}/payment-link`
+  },
+  
+  // Emailer
+  EMAILER: {
+    ALL: '/emailer/',
+    BY_ID: (id: string) => `/emailer/${id}`,
+    SEND: (id: string) => `/emailer/${id}/send`
+  },
+  
+  // Dashboard
+  DASHBOARD: {
+    ALL: '/dashboard/',
+    BY_ID: (id: string) => `/dashboard/${id}`,
+    STATISTICS: '/dashboard/statistics',
+    USER_REGISTRATIONS: '/dashboard/user-registrations',
+    ADS_CAMPAIGNS: '/dashboard/ads-campaigns',
+    ADS_REQUESTS: '/dashboard/ads-requests',
+    WEBSITE_FEEDBACKS: '/dashboard/website-feedbacks',
+    PDF_DOWNLOADS: '/dashboard/pdf-downloads',
+    EMAIL_CAMPAIGNS: '/dashboard/email-campaigns',
+    EMAIL_REQUESTS: '/dashboard/email-requests'
   }
 };
 
@@ -135,11 +170,62 @@ export const invalidateCache = async (feature: string, itemId?: string) => {
       }
     }
 
+    // Special handling for FINANCE feature - invalidate custom cache keys
+    if (feature === 'FINANCE') {
+      await invalidateCustomCacheKeys('finance_admin_');
+      await invalidateCustomCacheKeys('finance_user_');
+      // Also invalidate statistics cache
+      await redis.del('finance_stats');
+    }
+
     // Invalidate custom cache keys for specific features
-    if (feature === 'ADVERTISE_WITH_US') {
+    if (feature === 'ADMIN') {
+      await invalidateCustomCacheKeys('admin_');
+      // Also invalidate statistics cache
+      await redis.del('admin_stats');
+    } else if (feature === 'CAREER') {
+      await invalidateCustomCacheKeys('career_');
+      // Also invalidate statistics cache
+      await redis.del('career_stats');
+    } else if (feature === 'EVENTS') {
+      await invalidateCustomCacheKeys('events_');
+      // Also invalidate statistics cache
+      await redis.del('events_stats');
+    } else if (feature === 'UNI_PROGRAMS') {
+      await invalidateCustomCacheKeys('uniprograms_');
+      // Also invalidate statistics cache
+      await redis.del('uniprograms_stats');
+    } else if (feature === 'FREE_COURSES') {
+      await invalidateCustomCacheKeys('freecourses_');
+      // Also invalidate statistics cache
+      await redis.del('freecourses_stats');
+    } else if (feature === 'PROFESSIONAL_COURSES') {
+      await invalidateCustomCacheKeys('professionalcourses_');
+      // Also invalidate statistics cache
+      await redis.del('professionalcourses_stats');
+    } else if (feature === 'SCHOLARSHIPS') {
+      await invalidateCustomCacheKeys('scholarships_');
+      // Also invalidate statistics cache
+      await redis.del('scholarships_stats');
+    } else if (feature === 'GRANTS') {
+      await invalidateCustomCacheKeys('grants_');
+      // Also invalidate statistics cache
+      await redis.del('grants_stats');
+    } else if (feature === 'FELLOWSHIPS') {
+      await invalidateCustomCacheKeys('fellowships_');
+      // Also invalidate statistics cache
+      await redis.del('fellowships_stats');
+    } else if (feature === 'JOBS') {
+      await invalidateCustomCacheKeys('jobs_');
+      // Also invalidate statistics cache
+      await redis.del('jobs_stats');
+    } else if (feature === 'ADVERTISE_WITH_US') {
       await invalidateCustomCacheKeys('advertise_with_us_');
     } else if (feature === 'WEBSITE_FEEDBACK') {
       await invalidateCustomCacheKeys('website_feedback_');
+    } else if (feature === 'ANALYTICS') {
+      // Invalidate the comprehensive analytics cache
+      await redis.del(CACHE_KEYS.ANALYTICS.COMPREHENSIVE);
     }
 
     console.log(`✅ Cache invalidated for ${feature}${itemId ? ` (ID: ${itemId})` : ''}`);

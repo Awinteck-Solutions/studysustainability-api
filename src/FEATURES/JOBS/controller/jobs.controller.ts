@@ -5,6 +5,8 @@ import {Roles} from "../../AUTH/enums/roles.enum";
 import mongoose from "mongoose";
 import { CACHE_KEYS, CACHE_DURATION, invalidateCache, getCachedData, setCachedData, getUserCacheKey } from "../../../util/redis-helper";
 import { uploadFile } from "../../../util/s3";
+import InterestForm from "../../INTERESTFORM/schema/InterestForm.schema";
+import Engagement from "../../Engagement/schema/Engagement.schema";
 
 interface MulterRequest extends Request {
   file?: multer.File;
@@ -211,35 +213,84 @@ export class JobsController {
   static async getAll(req: Request, res: Response) {
     try {
       const {id, role} = req["currentUser"];
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+
       if (role == Roles.ADMIN) {
-        const key = CACHE_KEYS.JOBS.ALL;
+        // Create cache key with pagination
+        const cacheKey = `jobs_admin_${page}_${limit}`;
         // Check cache first
-        const cachedData = await getCachedData(key);
+        const cachedData = await getCachedData(cacheKey);
         if (cachedData) {
-          return res.json({message: "Data found", response: cachedData});
+          return res.json(cachedData);
         }
-        const models = await JobsModel.find({
-          status: {$ne: "DELETED"},
-        }).sort({createdAt: -1});
+
+        const [models, total] = await Promise.all([
+          JobsModel.find({
+            status: {$ne: "DELETED"},
+          }).sort({createdAt: -1}).skip(skip).limit(limit),
+          JobsModel.countDocuments({status: {$ne: "DELETED"}})
+        ]);
+
+        const totalPages = Math.ceil(total / limit);
+
+        const responsePayload = {
+          message: "Data found",
+          metadata: {
+            total,
+            page,
+            limit,
+            totalPages,
+            filters: {
+              status: "ACTIVE,INACTIVE,REJECTED"
+            }
+          },
+          response: models,
+        };
 
            // Cache the result for 1 hour
-           await setCachedData(key, models, CACHE_DURATION.MEDIUM);
-        res.status(200).json({message: "Data found", response: models});
+           await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+        res.status(200).json(responsePayload);
       } else {
-        const key = getUserCacheKey(CACHE_KEYS.JOBS.ALL, id);
+        // Create cache key with pagination for user-specific data
+        const cacheKey = `jobs_user_${id}_${page}_${limit}`;
         // Check cache first
-        const cachedData = await getCachedData(key);
+        const cachedData = await getCachedData(cacheKey);
         if (cachedData) {
-          return res.json({message: "Data found", response: cachedData});
+          return res.json(cachedData);
         }
-        const models = await JobsModel.find({
-          author: new mongoose.Types.ObjectId(id),
-          status: {$ne: "DELETED"},
-        }).sort({createdAt: -1});
+
+        const [models, total] = await Promise.all([
+          JobsModel.find({
+            author: new mongoose.Types.ObjectId(id),
+            status: {$ne: "DELETED"},
+          }).sort({createdAt: -1}).skip(skip).limit(limit),
+          JobsModel.countDocuments({
+            author: new mongoose.Types.ObjectId(id),
+            status: {$ne: "DELETED"}
+          })
+        ]);
+
+        const totalPages = Math.ceil(total / limit);
+
+        const responsePayload = {
+          message: "Data found",
+          metadata: {
+            total,
+            page,
+            limit,
+            totalPages,
+            filters: {
+              status: "ACTIVE,INACTIVE,REJECTED"
+            }
+          },
+          response: models,
+        };
 
            // Cache the result for 1 hour
-           await setCachedData(key, models, CACHE_DURATION.MEDIUM);
-        res.status(200).json({message: "Data found", response: models});
+           await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+        res.status(200).json(responsePayload);
       }
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -416,6 +467,104 @@ export class JobsController {
     } catch (error) {
       console.log('error :>> ', error);
       res.status(400).json({error: error.message});
+    }
+  }
+
+  // GET JOBS STATISTICS
+  static async getStats(req: Request, res: Response) {
+    try {
+      const { role } = req["currentUser"];
+      
+      // Only allow ADMIN role to access statistics
+      if (role !== Roles.ADMIN) {
+        return res.status(403).json({
+          status: false,
+          message: "Access denied. Admin privileges required.",
+        });
+      }
+
+      const cacheKey = 'jobs_stats';
+      
+      // Check cache first
+      const cachedData = await getCachedData(cacheKey);
+      if (cachedData) {
+        return res.json(cachedData);
+      }
+
+      // Get statistics
+      const [
+        totalJobs,
+        activeJobs,
+        inactiveJobs,
+        categoryStats,
+        industryStats,
+        recentJobs,
+        totalEnrolled,
+        totalEngagements
+      ] = await Promise.all([
+        JobsModel.countDocuments({  status: { $ne: "DELETED" }}),
+        JobsModel.countDocuments({ status: "ACTIVE" }),
+        JobsModel.countDocuments({ status: "INACTIVE" }),
+        JobsModel.aggregate([
+          { $match: { status: { $ne: "DELETED" } } },
+          { $group: { _id: "$jobCategory", count: { $sum: 1 } } },
+          { $sort: { count: -1 } }
+        ]),
+        JobsModel.aggregate([
+          { $match: { status: { $ne: "DELETED" } } },
+          { $group: { _id: "$industry", count: { $sum: 1 } } },
+          { $sort: { count: -1 } }
+        ]),
+        JobsModel.countDocuments({ 
+          createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+          status: { $ne: "DELETED" }
+        }),
+        InterestForm.countDocuments({ status: "ACTIVE", menu: 'Jobs' }),
+        Engagement.countDocuments({ itemType: 'JOBS' })
+      ]);
+
+      const stats = {
+        totalJobs,
+        activeJobs,
+        inactiveJobs,
+        categoryBreakdown: categoryStats.map(stat => ({
+          category: stat._id,
+          count: stat.count
+        })),
+        industryBreakdown: industryStats.map(stat => ({
+          industry: stat._id,
+          count: stat.count
+        })),
+        recentJobs, // Jobs created in last 7 days
+        statusBreakdown: {
+          active: activeJobs,
+          inactive: inactiveJobs
+        },
+        // Additional platform statistics
+        totalEnrolled, // Total active interest form submissions for jobs
+        totalEngagements // Total engagement records for jobs
+      };
+
+      const responsePayload = {
+        status: true,
+        message: "Jobs statistics retrieved successfully",
+        response: stats,
+        metadata: {
+          generatedAt: new Date().toISOString(),
+          generatedBy: req["currentUser"].id
+        }
+      };
+
+      // Cache the result for 30 minutes
+      await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+      
+      return res.status(200).json(responsePayload);
+    } catch (error) {
+      console.log("error :>> ", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
     }
   }
   

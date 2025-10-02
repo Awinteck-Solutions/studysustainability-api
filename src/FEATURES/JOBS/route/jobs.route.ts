@@ -68,6 +68,14 @@ Router.delete("/permanent/:id",
 );
 
 
+Router.get("/statistics",
+    authentification,
+    authorization(AdminModel,[Roles.ADMIN],[Permission.ALL]),
+    (req: Request, res: Response) => {
+        JobsController.getStats(req, res)
+    }
+);
+
 // Public
 Router.get("/public", (req: Request, res: Response) => {
         JobsController.getAllPublic(req, res)

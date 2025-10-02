@@ -41,6 +41,14 @@ Router.get("/list",
     }
 );
 
+Router.get("/stats",
+    authentification,
+    authorization(AdminModel,[Roles.ADMIN],[Permission.ALL]),
+    (req: Request, res: Response) => { 
+        AdminController.getStats(req, res)
+    }
+);
+
 
 Router.get("/list/:id",
     authentification,

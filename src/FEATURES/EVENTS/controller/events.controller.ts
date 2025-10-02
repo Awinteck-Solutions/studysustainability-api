@@ -82,6 +82,7 @@ export class EventsController {
 
       // Invalidate cache after creating new event
       await invalidateCache('EVENTS');
+      await invalidateCache('ANALYTICS');
 
       res
         .status(201)
@@ -117,6 +118,7 @@ export class EventsController {
         language,
         applyLink,
         howToApply,
+        status,
       } = req.body;
 
       // Find the existing Event document by ID (passed in the route params)
@@ -153,6 +155,7 @@ export class EventsController {
       existingEvent.language = language || existingEvent.language;
       existingEvent.applyLink = applyLink || existingEvent.applyLink;
       existingEvent.howToApply = howToApply || existingEvent.howToApply;
+      existingEvent.status = status || existingEvent.status;
       if (req.file) {
         // existingEvent.image =
         //   `${req.file.fieldname}${req.file.filename}` || existingEvent.image;
@@ -167,6 +170,7 @@ export class EventsController {
 
       // Invalidate cache after updating event
       await invalidateCache('EVENTS', req.params.id);
+      await invalidateCache('ANALYTICS');
 
       res.status(200).json({message: "Event updated", response: updatedEvent});
     } catch (error) {
@@ -228,42 +232,84 @@ export class EventsController {
   static async getAll(req: Request, res: Response) {
     try {
       const {id, role} = req["currentUser"];
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const skip = (page - 1) * limit;
+
       if (role == Roles.ADMIN) {
-        const key = CACHE_KEYS.EVENTS.ALL;
+        // Create cache key with pagination
+        const cacheKey = `events_admin_${page}_${limit}`;
         // Check cache first
-        const cachedData = await getCachedData(key);
+        const cachedData = await getCachedData(cacheKey);
         if (cachedData) {
-          return res.json({message: "Data found", response: cachedData});
+          return res.json(cachedData);
         }
 
+        const [models, total] = await Promise.all([
+          EventsModel.find({
+            status: {$ne: "DELETED"},
+          }).sort({createdAt: -1}).skip(skip).limit(limit),
+          EventsModel.countDocuments({status: {$ne: "DELETED"}})
+        ]);
 
-        const models = await EventsModel.find({
-          status: {$ne: "DELETED"},
-        }).sort({createdAt: -1});
+        const totalPages = Math.ceil(total / limit);
 
-        console.log("models :>> ", models);
+        const responsePayload = {
+          message: "Events Data found",
+          metadata: {
+            total,
+            page,
+            limit,
+            totalPages,
+            filters: {
+              status: "ACTIVE,INACTIVE,REJECTED"
+            }
+          },
+          response: models,
+        };
 
          // Cache the result for 1 hour
-         await setCachedData(key, models, CACHE_DURATION.MEDIUM);
-        res.status(200).json({message: "Events Data found", response: models});
+         await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+        res.status(200).json(responsePayload);
       } else {
-        const key = getUserCacheKey(CACHE_KEYS.EVENTS.ALL, id);
+        // Create cache key with pagination for user-specific data
+        const cacheKey = `events_user_${id}_${page}_${limit}`;
         // Check cache first
-        const cachedData = await getCachedData(key);
+        const cachedData = await getCachedData(cacheKey);
         if (cachedData) {
-          return res.json({message: "Data found", response: cachedData});
+          return res.json(cachedData);
         }
 
-        const models = await EventsModel.find({
-          author: new mongoose.Types.ObjectId(id),
-          status: {$ne: "DELETED"},
-        }).sort({createdAt: -1});
+        const [models, total] = await Promise.all([
+          EventsModel.find({
+            author: new mongoose.Types.ObjectId(id),
+            status: {$ne: "DELETED"},
+          }).sort({createdAt: -1}).skip(skip).limit(limit),
+          EventsModel.countDocuments({
+            author: new mongoose.Types.ObjectId(id),
+            status: {$ne: "DELETED"}
+          })
+        ]);
 
-        console.log("models 2:>> ", models);
+        const totalPages = Math.ceil(total / limit);
+
+        const responsePayload = {
+          message: "Events Data found",
+          metadata: {
+            total,
+            page,
+            limit,
+            totalPages,
+            filters: {
+              status: "ACTIVE,INACTIVE,REJECTED"
+            }
+          },
+          response: models,
+        };
 
          // Cache the result for 1 hour
-         await setCachedData(key, models, CACHE_DURATION.MEDIUM);
-        res.status(200).json({message: "Events Data found", response: models});
+         await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+        res.status(200).json(responsePayload);
       }
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -285,6 +331,7 @@ export class EventsController {
 
       // Invalidate cache after soft deletion
       await invalidateCache('EVENTS', req.params.id);
+      await invalidateCache('ANALYTICS');
       res.status(200).json({message: "Event status updated to DELETED", event});
     } catch (error) {
       res.status(400).json({error: error.message});
@@ -473,10 +520,7 @@ static async getEventsDashboardMetrics(req: Request, res: Response) {
         ? engagementAggregation[0].totalViews
         : 0;
 
-    console.log('object :>> ', totalEvents,
-        totalActiveEvents,
-        totalRegisteredInterests,
-      totalViews,);
+    
     
     return res.status(200).json({
       success: true,
@@ -493,6 +537,156 @@ static async getEventsDashboardMetrics(req: Request, res: Response) {
     return res.status(500).json({
       success: false,
       message: "System error",
+    });
+  }
+}
+
+static async updateStatus(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: "Status is required",
+      });
+    }
+
+    const validStatuses = ["ACTIVE", "INACTIVE", "REJECTED", "DELETED"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status. Must be one of: ACTIVE, INACTIVE, REJECTED, DELETED",
+      });
+    }
+
+    const event = await EventsModel.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true }
+    );
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: "Event not found",
+      });
+    }
+
+    // Invalidate analytics cache
+    await invalidateCache('ANALYTICS');
+    // invalidate cache for the event
+    invalidateCache('EVENTS', id);
+
+    return res.status(200).json({
+      success: true,
+      message: "Event status updated successfully",
+      response: event,
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({
+      success: false,
+      message: "System error",
+    });
+  }
+}
+
+// GET EVENTS STATISTICS
+static async getStats(req: Request, res: Response) {
+  try {
+    const { role } = req["currentUser"];
+    
+    // Only allow ADMIN role to access statistics
+    if (role !== Roles.ADMIN) {
+      return res.status(403).json({
+        status: false,
+        message: "Access denied. Admin privileges required.",
+      });
+    }
+
+    const cacheKey = 'events_stats';
+    
+    // Check cache first
+    const cachedData = await getCachedData(cacheKey);
+    if (cachedData) {
+      return res.json(cachedData);
+    }
+
+    // Get statistics
+    const [
+      totalEvents,
+      activeEvents,
+      inactiveEvents, 
+      eventTypeStats,
+      providerStats,
+      recentEvents,
+      totalEnrolled,
+      totalEngagements
+    ] = await Promise.all([
+      EventsModel.countDocuments({  status: { $ne: "DELETED" }}),
+      EventsModel.countDocuments({ status: "ACTIVE" }),
+      EventsModel.countDocuments({ status: "INACTIVE" }), 
+      EventsModel.aggregate([
+        { $match: { status: { $ne: "DELETED" } } },
+        { $group: { _id: "$eventType", count: { $sum: 1 } } },
+        { $sort: { count: -1 } }
+      ]),
+      EventsModel.aggregate([
+        { $match: { status: { $ne: "DELETED" } } },
+        { $group: { _id: "$nameOfProvider", count: { $sum: 1 } } },
+        { $sort: { count: -1 } }
+      ]),
+      EventsModel.countDocuments({ 
+        createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        status: { $ne: "DELETED" }
+      }),
+      InterestForm.countDocuments({ status: "ACTIVE", menu: 'Events'}),
+      Engagement.countDocuments({ itemType: 'EVENTS'})
+    ]);
+
+    const stats = {
+      totalEvents,
+      activeEvents,
+      inactiveEvents,
+      eventTypeBreakdown: eventTypeStats.map(stat => ({
+        eventType: stat._id,
+        count: stat.count
+      })),
+      providerBreakdown: providerStats.map(stat => ({
+        provider: stat._id,
+        count: stat.count
+      })),
+      recentEvents, // Events created in last 7 days
+      statusBreakdown: {
+        active: activeEvents,
+        inactive: inactiveEvents,
+      },
+      // Additional platform statistics
+      totalEnrolled, // Total active interest form submissions
+      totalEngagements // Total engagement records
+    };
+
+    const responsePayload = {
+      status: true,
+      message: "Events statistics retrieved successfully",
+      response: stats,
+      metadata: {
+        generatedAt: new Date().toISOString(),
+        generatedBy: req["currentUser"].id
+      }
+    };
+
+    // Cache the result for 30 minutes
+    await setCachedData(cacheKey, responsePayload, CACHE_DURATION.MEDIUM);
+    
+    return res.status(200).json(responsePayload);
+  } catch (error) {
+    console.log("error :>> ", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
     });
   }
 }
